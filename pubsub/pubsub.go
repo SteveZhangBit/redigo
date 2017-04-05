@@ -8,6 +8,6 @@ const (
 	NotifyGeneric
 )
 
-func NotifyKeyspaceEvent(t int, event string, key []byte, dbid int) {
+func NotifyKeyspaceEvent(t int, event string, key string, dbid int) {
 
 }

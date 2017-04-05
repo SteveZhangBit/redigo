@@ -3,13 +3,10 @@ package list
 import (
 	"container/list"
 
-	"github.com/SteveZhangBit/redigo/pubsub"
-
-	"github.com/SteveZhangBit/redigo/rstring"
-
-	"github.com/SteveZhangBit/redigo/shared"
-
 	"github.com/SteveZhangBit/redigo"
+	"github.com/SteveZhangBit/redigo/pubsub"
+	"github.com/SteveZhangBit/redigo/rstring"
+	"github.com/SteveZhangBit/redigo/shared"
 )
 
 const (
@@ -277,6 +274,10 @@ func LPOPCommand(c *redigo.RedigoClient) {
 
 func RPOPCommand(c *redigo.RedigoClient) {
 	pop(c, ListTail)
+}
+
+func LRANGECommand(c *redigo.RedigoClient) {
+
 }
 
 func LTRIMCommand(c *redigo.RedigoClient) {

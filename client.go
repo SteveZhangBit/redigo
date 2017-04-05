@@ -9,7 +9,7 @@ import (
 type RedigoClient struct {
 	DB     *RedigoDB
 	Server *RedigoServer
-	Argv   [][]byte
+	Argv   []string
 	Argc   int
 }
 
@@ -43,7 +43,7 @@ func (r *RedigoClient) AddReplyError(msg string) {
 	r.AddReply(shared.CRLF)
 }
 
-func (r *RedigoClient) LookupKeyReadOrReply(key []byte, reply string) interface{} {
+func (r *RedigoClient) LookupKeyReadOrReply(key string, reply string) interface{} {
 	x := r.DB.LookupKeyRead(key)
 	if x != nil {
 		r.AddReply(reply)
@@ -51,6 +51,6 @@ func (r *RedigoClient) LookupKeyReadOrReply(key []byte, reply string) interface{
 	return x
 }
 
-func (r *RedigoClient) LookupKeyWriteOrReply(key []byte, reply string) interface{} {
+func (r *RedigoClient) LookupKeyWriteOrReply(key string, reply string) interface{} {
 	return nil
 }

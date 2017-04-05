@@ -3,11 +3,10 @@ package hash
 import (
 	"math"
 
+	"github.com/SteveZhangBit/redigo"
 	"github.com/SteveZhangBit/redigo/pubsub"
 	"github.com/SteveZhangBit/redigo/rstring"
 	"github.com/SteveZhangBit/redigo/shared"
-
-	"github.com/SteveZhangBit/redigo"
 )
 
 const (
@@ -24,7 +23,7 @@ func CheckType(c *redigo.RedigoClient, o interface{}) (ok bool) {
 	return
 }
 
-func lookupWriteOrCreate(c *redigo.RedigoClient, key []byte) (h HashTable) {
+func lookupWriteOrCreate(c *redigo.RedigoClient, key string) (h HashTable) {
 	if o := c.DB.LookupKeyWrite(key); o == nil {
 		h = make(HashTable)
 		c.DB.Add(key, h)
@@ -37,10 +36,13 @@ func lookupWriteOrCreate(c *redigo.RedigoClient, key []byte) (h HashTable) {
 	return
 }
 
+/*-----------------------------------------------------------------------------
+ * Hash type commands
+ *----------------------------------------------------------------------------*/
+
 /* Add an element, discard the old if the key already exists.
  * Return false on insert and true on update. */
-func set(h HashTable, field []byte, val *rstring.RString) (update bool) {
-	key := string(field)
+func set(h HashTable, key string, val *rstring.RString) (update bool) {
 	_, update = h[key]
 	h[key] = val
 	return
@@ -67,7 +69,7 @@ func HSETNXCommand(c *redigo.RedigoClient) {
 	if h = lookupWriteOrCreate(c, c.Argv[1]); h == nil {
 		return
 	}
-	if _, ok := h[string(c.Argv[2])]; ok {
+	if _, ok := h[c.Argv[2]]; ok {
 		c.AddReply(shared.CZero)
 	} else {
 		set(h, c.Argv[2], rstring.New(c.Argv[3]))
@@ -107,7 +109,7 @@ func HINCRBYCommand(c *redigo.RedigoClient) {
 	if h = lookupWriteOrCreate(c, c.Argv[1]); h == nil {
 		return
 	}
-	if cur, ok := h[string(c.Argv[2])]; ok {
+	if cur, ok := h[c.Argv[2]]; ok {
 		if val, ok = rstring.GetInt64FromStringOrReply(c, cur, "hash value is not an integer"); !ok {
 			return
 		}
@@ -145,17 +147,17 @@ func HINCRBYFLOATCommand(c *redigo.RedigoClient) {
 	pubsub.NotifyKeyspaceEvent(pubsub.NotifyHash, "hincrbyfloat", c.Argv[1], c.DB.ID)
 	c.Server.Dirty++
 
-	/* Always replicate HINCRBYFLOAT as an HSET command with the final value
+	/* TODO: Always replicate HINCRBYFLOAT as an HSET command with the final value
 	 * in order to make sure that differences in float pricision or formatting
 	 * will not create differences in replicas or after an AOF restart. */
 }
 
-func addFieldToReply(c *redigo.RedigoClient, h HashTable, field []byte) {
+func addFieldToReply(c *redigo.RedigoClient, h HashTable, key string) {
 	if h == nil {
 		c.AddReply(shared.NullBulk)
 		return
 	}
-	if val, ok := h[string(field)]; !ok {
+	if val, ok := h[key]; !ok {
 		c.AddReply(shared.NullBulk)
 	} else {
 		c.AddReplyBulk(val.String())
@@ -192,7 +194,7 @@ func HDELCommand(c *redigo.RedigoClient) {
 	}
 
 	for i := 2; i < c.Argc; i++ {
-		key := string(c.Argv[i])
+		key := c.Argv[i]
 		if _, ok := h[key]; ok {
 			delete(h, key)
 			deleted++
@@ -268,7 +270,7 @@ func HGETALLCommand(c *redigo.RedigoClient) {
 
 func HEXISTSCommand(c *redigo.RedigoClient) {
 	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.CZero); o != nil && CheckType(c, o) {
-		if _, ok := o.(HashTable)[string(c.Argv[2])]; ok {
+		if _, ok := o.(HashTable)[c.Argv[2]]; ok {
 			c.AddReply(shared.COne)
 		} else {
 			c.AddReply(shared.CZero)
