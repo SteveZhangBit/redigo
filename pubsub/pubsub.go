@@ -5,6 +5,7 @@ const (
 	NotifyList
 	NotifyHash
 	NotifySet
+	NotifyZSet
 	NotifyGeneric
 )
 

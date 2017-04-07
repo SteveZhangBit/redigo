@@ -27,6 +27,10 @@ func (r *RedigoClient) AddReplyInt64(x int64) {
 	}
 }
 
+func (r *RedigoClient) AddReplyFloat64(x float64) {
+
+}
+
 func (r *RedigoClient) AddReplyMultiBulkLen(x int) {
 	r.AddReply(fmt.Sprintf("*%d", x))
 }
@@ -52,5 +56,9 @@ func (r *RedigoClient) LookupKeyReadOrReply(key string, reply string) interface{
 }
 
 func (r *RedigoClient) LookupKeyWriteOrReply(key string, reply string) interface{} {
-	return nil
+	x := r.DB.LookupKeyWrite(key)
+	if x != nil {
+		r.AddReply(reply)
+	}
+	return x
 }

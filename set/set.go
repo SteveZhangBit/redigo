@@ -159,7 +159,7 @@ func SADDCommand(c *redigo.RedigoClient) {
 		}
 	}
 
-	var added uint
+	var added int
 	for i := 2; i < c.Argc; i++ {
 		if s.Add(rstring.New(c.Argv[i])) {
 			added++
@@ -181,7 +181,7 @@ func SREMCommand(c *redigo.RedigoClient) {
 		s = o.(*Set)
 	}
 
-	var deleted uint
+	var deleted int
 	var keyremoved bool
 	for i := 2; i < c.Argc; i++ {
 		if s.Remove(rstring.New(c.Argv[i])) {

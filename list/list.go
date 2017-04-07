@@ -79,7 +79,7 @@ func CheckType(c *redigo.RedigoClient, o interface{}) (ok bool) {
 
 func push(c *redigo.RedigoClient, where int) {
 	var l *LinkedList
-	var pushed uint = 0
+	var pushed int
 
 	if o := c.DB.LookupKeyWrite(c.Argv[1]); o != nil {
 		var ok bool

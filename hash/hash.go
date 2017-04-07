@@ -184,7 +184,7 @@ func HMGETCommand(c *redigo.RedigoClient) {
 
 func HDELCommand(c *redigo.RedigoClient) {
 	var h HashTable
-	var deleted uint
+	var deleted int
 	var keyremoved bool
 
 	if o := c.LookupKeyWriteOrReply(c.Argv[1], shared.CZero); o == nil || !CheckType(c, o) {

@@ -5,7 +5,10 @@ var (
 )
 
 type RedigoServer struct {
-	DB *RedigoDB
+	DB []*RedigoDB
 	// DB persistence
-	Dirty uint // changes to DB from the last save
+	Dirty int // changes to DB from the last save
+	// Fields used only for stas
+	KeyspaceHits   int
+	KeyspaceMisses int
 }
