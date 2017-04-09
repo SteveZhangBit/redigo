@@ -1,54 +1,22 @@
-package zset
+package command
 
 import (
 	"fmt"
 
-	"github.com/SteveZhangBit/redigo/pubsub"
-
 	"github.com/SteveZhangBit/redigo"
-	"github.com/SteveZhangBit/redigo/rstring"
+	"github.com/SteveZhangBit/redigo/pubsub"
+	"github.com/SteveZhangBit/redigo/rtype/rstring"
+	"github.com/SteveZhangBit/redigo/rtype/zset"
+	"github.com/SteveZhangBit/redigo/rtype/zset/zskiplist"
 	"github.com/SteveZhangBit/redigo/shared"
-	"github.com/SteveZhangBit/redigo/zset/zskiplist"
 )
-
-// This package is the same of ZSETs in redis. The following instruction is copied from t_zset.c.
-
-/*-----------------------------------------------------------------------------
- * Sorted set API
- *----------------------------------------------------------------------------*/
-
-/* ZSETs are ordered sets using two data structures to hold the same elements
- * in order to get O(log(N)) INSERT and REMOVE operations into a sorted
- * data structure.
- *
- * The elements are added to a hash table mapping Redis objects to scores.
- * At the same time the elements are added to a skip list mapping scores
- * to Redis objects (so objects are sorted by scores in this "view"). */
-
-type ZSet struct {
-	// Currently, it should only be skiplist
-	Val interface{}
-	// A map to store the keys
-	Dict map[rstring.RString]float64
-}
-
-func New() *ZSet {
-	return &ZSet{Val: zskiplist.New()}
-}
-
-func CheckType(c *redigo.RedigoClient, o interface{}) (ok bool) {
-	if _, ok = o.(*ZSet); !ok {
-		c.AddReply(shared.WrongTypeErr)
-	}
-	return
-}
 
 /*-----------------------------------------------------------------------------
  * Sorted set commands
  *----------------------------------------------------------------------------*/
 
 func ZADDCommand(c *redigo.RedigoClient) {
-	var z *ZSet
+	var z *zset.ZSet
 
 	/* TODO: Parse options. At the end 'scoreidx' is set to the argument position
 	 * of the score of the first score-element pair. */
@@ -63,7 +31,7 @@ func ZADDCommand(c *redigo.RedigoClient) {
 	 * either execute fully or nothing at all. */
 	scores := make([]float64, elements)
 	for i := 0; i < elements; i++ {
-		if x, ok := rstring.GetFloat64FromStringOrReply(c, c.Argv[scoreidx+i*2], ""); !ok {
+		if x, ok := GetFloat64FromStringOrReply(c, c.Argv[scoreidx+i*2], ""); !ok {
 			return
 		} else {
 			scores[i] = x
@@ -72,11 +40,11 @@ func ZADDCommand(c *redigo.RedigoClient) {
 
 	// Lookup the key and create the sorted set if does not exist.
 	if o := c.DB.LookupKeyWrite(c.Argv[1]); o == nil {
-		z = New()
+		z = zset.New()
 		c.DB.Add(c.Argv[1], z)
 	} else {
 		var ok bool
-		if z, ok = o.(*ZSet); !ok {
+		if z, ok = o.(*zset.ZSet); !ok {
 			c.AddReply(shared.WrongTypeErr)
 			return
 		}
@@ -125,11 +93,14 @@ func ZINCRBYCommand(c *redigo.RedigoClient) {
 }
 
 func ZREMCommand(c *redigo.RedigoClient) {
-	var z *ZSet
-	if o := c.LookupKeyWriteOrReply(c.Argv[1], shared.CZero); o == nil || !CheckType(c, o) {
+	var z *zset.ZSet
+
+	var ok bool
+	if o := c.LookupKeyWriteOrReply(c.Argv[1], shared.CZero); o == nil {
 		return
-	} else {
-		z = o.(*ZSet)
+	} else if z, ok = o.(*zset.ZSet); !ok {
+		c.AddReply(shared.WrongTypeErr)
+		return
 	}
 
 	var deleted int
@@ -187,14 +158,14 @@ func ZINTERSTORECommand(c *redigo.RedigoClient) {
 }
 
 func zrange(c *redigo.RedigoClient, reverse bool) {
-	var z *ZSet
+	var z *zset.ZSet
 	var start, end int
 	var withscores bool
 
-	if x, ok := rstring.GetInt64FromStringOrReply(c, c.Argv[2], ""); !ok {
+	if x, ok := GetInt64FromStringOrReply(c, c.Argv[2], ""); !ok {
 		return
 	} else {
-		if y, ok := rstring.GetInt64FromStringOrReply(c, c.Argv[3], ""); !ok {
+		if y, ok := GetInt64FromStringOrReply(c, c.Argv[3], ""); !ok {
 			return
 		} else {
 			start, end = int(x), int(y)
@@ -208,10 +179,12 @@ func zrange(c *redigo.RedigoClient, reverse bool) {
 		return
 	}
 
-	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.EmptyMultiBulk); o == nil || !CheckType(c, o) {
+	var ok bool
+	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.EmptyMultiBulk); o == nil {
 		return
-	} else {
-		z = o.(*ZSet)
+	} else if z, ok = o.(*zset.ZSet); !ok {
+		c.AddReply(shared.WrongTypeErr)
+		return
 	}
 
 	// Sanitize indexes.
@@ -285,7 +258,7 @@ func ZREVRANGECommand(c *redigo.RedigoClient) {
 }
 
 func zrangescore(c *redigo.RedigoClient, reverse bool) {
-	// var z *ZSet
+	// var z *zset.ZSet
 	// var minidx, maxidx int
 
 	// if reverse {
@@ -322,20 +295,26 @@ func ZREVRANGEBYLEXCommand(c *redigo.RedigoClient) {
 }
 
 func ZCARDCommand(c *redigo.RedigoClient) {
-	var z *ZSet
-	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.CZero); o != nil && CheckType(c, o) {
-		z = o.(*ZSet)
-		c.AddReplyInt64(int64(len(z.Dict)))
+	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.CZero); o != nil {
+		if z, ok := o.(*zset.ZSet); !ok {
+			c.AddReply(shared.WrongTypeErr)
+		} else {
+			c.AddReplyInt64(int64(len(z.Dict)))
+		}
 	}
 }
 
 func ZSCORECommand(c *redigo.RedigoClient) {
-	var z *ZSet
-	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.NullBulk); o == nil || !CheckType(c, o) {
+	var z *zset.ZSet
+
+	var ok bool
+	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.NullBulk); o == nil {
 		return
-	} else {
-		z = o.(*ZSet)
+	} else if z, ok = o.(*zset.ZSet); !ok {
+		c.AddReply(shared.WrongTypeErr)
+		return
 	}
+
 	if score, ok := z.Dict[*rstring.New(c.Argv[2])]; ok {
 		c.AddReplyFloat64(score)
 	} else {
@@ -344,12 +323,16 @@ func ZSCORECommand(c *redigo.RedigoClient) {
 }
 
 func zrank(c *redigo.RedigoClient, reverse bool) {
-	var z *ZSet
-	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.NullBulk); o == nil || !CheckType(c, o) {
+	var z *zset.ZSet
+
+	var ok bool
+	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.NullBulk); o == nil {
 		return
-	} else {
-		z = o.(*ZSet)
+	} else if z, ok = o.(*zset.ZSet); !ok {
+		c.AddReply(shared.WrongTypeErr)
+		return
 	}
+
 	length := len(z.Dict)
 
 	switch z_enc := z.Val.(type) {

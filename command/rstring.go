@@ -1,112 +1,21 @@
-package rstring
+package command
 
 import (
-	"bytes"
-	"encoding/hex"
 	"fmt"
 	"math"
 	"strconv"
-	"unicode/utf8"
 
 	"github.com/SteveZhangBit/redigo"
 	"github.com/SteveZhangBit/redigo/pubsub"
+	"github.com/SteveZhangBit/redigo/rtype/rstring"
 	"github.com/SteveZhangBit/redigo/shared"
 )
-
-type RString struct {
-	// Could be *SDS or int64 for integer strings
-	Val interface{}
-}
-
-func New(val string) *RString {
-	// Check whether can be convert to integer
-	if x, err := strconv.ParseInt(val, 10, 64); err != nil {
-		return &RString{Val: x}
-	}
-	return &RString{Val: val}
-}
-
-func NewFromInt64(val int64) *RString {
-	return &RString{Val: val}
-}
-
-func NewFromFloat64(val float64) *RString {
-	return &RString{Val: fmt.Sprintf("%.17f", val)}
-}
-
-func (s *RString) String() string {
-	switch x := s.Val.(type) {
-	case string:
-		if utf8.Valid([]byte(x)) {
-			return x
-		} else {
-			return hex.EncodeToString([]byte(x))
-		}
-	case int64:
-		return strconv.FormatInt(x, 10)
-	default:
-		panic(fmt.Sprintf("Type %T is not a string object", x))
-	}
-}
-
-func (s *RString) Bytes() []byte {
-	switch x := s.Val.(type) {
-	case string:
-		return []byte(x)
-	case int64:
-		return []byte(strconv.FormatInt(x, 10))
-	default:
-		panic(fmt.Sprintf("Type %T is not a string object", x))
-	}
-}
-
-func (r *RString) Len() int64 {
-	switch x := r.Val.(type) {
-	case string:
-		return int64(len(x))
-	case int64:
-		return int64(len(strconv.FormatInt(x, 10)))
-	default:
-		panic(fmt.Sprintf("Type %T is not a string object", x))
-	}
-}
-
-func (r *RString) Append(b string) {
-	switch x := r.Val.(type) {
-	case string:
-		r.Val = string(append([]byte(x), []byte(b)...))
-	case int64:
-		r.Val = string(append([]byte(strconv.FormatInt(x, 10)), []byte(b)...))
-	default:
-		panic(fmt.Sprintf("Type %T is not a string object", x))
-	}
-}
-
-func CompareStringObjects(a, b *RString) int {
-	x, x_ok := a.Val.(int64)
-	y, y_ok := b.Val.(int64)
-	if x_ok && y_ok {
-		if x < y {
-			return -1
-		} else if x > y {
-			return 1
-		} else {
-			return 0
-		}
-	} else {
-		return bytes.Compare(a.Bytes(), b.Bytes())
-	}
-}
-
-func EqualStringObjects(a, b *RString) bool {
-	return CompareStringObjects(a, b) == 0
-}
 
 func GetInt64FromStringOrReply(c *redigo.RedigoClient, o interface{}, msg string) (x int64, ok bool) {
 	switch str := o.(type) {
 	case nil:
 		return 0, true
-	case *RString:
+	case *rstring.RString:
 		x, ok = str.Val.(int64)
 	case string:
 		if i, err := strconv.ParseInt(str, 10, 64); err != nil {
@@ -132,7 +41,7 @@ func GetFloat64FromStringOrReply(c *redigo.RedigoClient, o interface{}, msg stri
 	case nil:
 		return 0.0, true
 
-	case *RString:
+	case *rstring.RString:
 		switch val := str.Val.(type) {
 		case string:
 			if i, err := strconv.ParseFloat(val, 64); err != nil {
@@ -165,13 +74,6 @@ func GetFloat64FromStringOrReply(c *redigo.RedigoClient, o interface{}, msg stri
 	return
 }
 
-func CheckType(c *redigo.RedigoClient, o interface{}) (ok bool) {
-	if _, ok = o.(*RString); !ok {
-		c.AddReply(shared.WrongTypeErr)
-	}
-	return
-}
-
 func CheckStringlength(c *redigo.RedigoClient, size int64) bool {
 	if size > 512*1024*1024 {
 		c.AddReplyError("string exceeds maximum allowed size (512MB)")
@@ -193,7 +95,7 @@ func CheckStringlength(c *redigo.RedigoClient, size int64) bool {
 
 // TODO: Currently, we only implement the very basic function of SET command.
 func SETCommand(c *redigo.RedigoClient) {
-	c.DB.SetKey(c.Argv[1], New(c.Argv[2]))
+	c.DB.SetKey(c.Argv[1], rstring.New(c.Argv[2]))
 	c.Server.Dirty++
 	pubsub.NotifyKeyspaceEvent(pubsub.NotifyString, "set", c.Argv[1], c.DB.ID)
 	c.AddReply(shared.OK)
@@ -238,7 +140,7 @@ func MSETNXCommand(c *redigo.RedigoClient) {
 func GETCommand(c *redigo.RedigoClient) bool {
 	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.NullBulk); o == nil {
 		return true
-	} else if str, ok := o.(*RString); !ok {
+	} else if str, ok := o.(*rstring.RString); !ok {
 		c.AddReply(shared.WrongTypeErr)
 		return false
 	} else {
@@ -248,10 +150,11 @@ func GETCommand(c *redigo.RedigoClient) bool {
 }
 
 func INCRBYFLOATCommand(c *redigo.RedigoClient) {
-	var str *RString
+	var str *rstring.RString
 
 	o := c.DB.LookupKeyWrite(c.Argv[1])
-	if o != nil && !CheckType(c, o) {
+	if _, ok := o.(*rstring.RString); o != nil && !ok {
+		c.AddReply(shared.WrongTypeErr)
 		return
 	}
 
@@ -267,10 +170,10 @@ func INCRBYFLOATCommand(c *redigo.RedigoClient) {
 		}
 
 		if o != nil {
-			str = o.(*RString)
+			str = o.(*rstring.RString)
 			str.Val = fmt.Sprintf("%.17f", x)
 		} else {
-			str = NewFromFloat64(x)
+			str = rstring.NewFromFloat64(x)
 			c.DB.Add(c.Argv[1], str)
 		}
 
@@ -285,12 +188,12 @@ func INCRBYFLOATCommand(c *redigo.RedigoClient) {
 	}
 }
 
-func incrDecr(c *redigo.RedigoClient, incr int64) {
-	var str *RString
+func strIncrDecr(c *redigo.RedigoClient, incr int64) {
+	var str *rstring.RString
 
 	o := c.DB.LookupKeyWrite(c.Argv[1])
-	// If object exists, test its type
-	if o != nil && !CheckType(c, o) {
+	if _, ok := o.(*rstring.RString); o != nil && !ok {
+		c.AddReply(shared.WrongTypeErr)
 		return
 	}
 
@@ -306,10 +209,10 @@ func incrDecr(c *redigo.RedigoClient, incr int64) {
 
 		// TODO: Redis uses Shared Integers to save memory, we do not implement this feature right now.
 		if o != nil {
-			str = o.(*RString)
+			str = o.(*rstring.RString)
 			str.Val = x
 		} else {
-			str = NewFromInt64(x)
+			str = rstring.NewFromInt64(x)
 			c.DB.Add(c.Argv[1], str)
 		}
 		c.DB.SignalModifyKey(c.Argv[1])
@@ -322,37 +225,38 @@ func incrDecr(c *redigo.RedigoClient, incr int64) {
 }
 
 func INCRCommand(c *redigo.RedigoClient) {
-	incrDecr(c, 1)
+	strIncrDecr(c, 1)
 }
 
 func DECRCommand(c *redigo.RedigoClient) {
-	incrDecr(c, -1)
+	strIncrDecr(c, -1)
 }
 
 func INCRBYCommand(c *redigo.RedigoClient) {
 	if incr, ok := GetInt64FromStringOrReply(c, c.Argv[2], ""); ok {
-		incrDecr(c, incr)
+		strIncrDecr(c, incr)
 	}
 }
 
 func DECRBYCommand(c *redigo.RedigoClient) {
 	if incr, ok := GetInt64FromStringOrReply(c, c.Argv[2], ""); ok {
-		incrDecr(c, -incr)
+		strIncrDecr(c, -incr)
 	}
 }
 
 func APPENDCommand(c *redigo.RedigoClient) {
-	var str *RString
+	var str *rstring.RString
 	var totallen int64 = 0
 
+	var ok bool
 	if o := c.DB.LookupKeyWrite(c.Argv[1]); o == nil {
-		str = New(c.Argv[2])
+		str = rstring.New(c.Argv[2])
 		c.DB.Add(c.Argv[1], str)
 		totallen = str.Len()
-	} else if !CheckType(c, o) {
+	} else if str, ok = o.(*rstring.RString); !ok {
+		c.AddReply(shared.WrongTypeErr)
 		return
 	} else {
-		str = o.(*RString)
 		totallen = str.Len() + int64(len(c.Argv[2]))
 		if !CheckStringlength(c, totallen) {
 			return
@@ -367,7 +271,11 @@ func APPENDCommand(c *redigo.RedigoClient) {
 }
 
 func STRLENCommand(c *redigo.RedigoClient) {
-	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.CZero); o != nil && CheckType(c, o) {
-		c.AddReplyInt64(o.(*RString).Len())
+	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.CZero); o != nil {
+		if str, ok := o.(*rstring.RString); !ok {
+			c.AddReply(shared.WrongTypeErr)
+		} else {
+			c.AddReplyInt64(str.Len())
+		}
 	}
 }

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SteveZhangBit/redigo/rstring"
+	"github.com/SteveZhangBit/redigo/rtype/rstring"
 )
 
 /* This skiplist implementation is almost a C translation of the original

@@ -1,59 +1,38 @@
-package hash
+package command
 
 import (
 	"math"
 
 	"github.com/SteveZhangBit/redigo"
 	"github.com/SteveZhangBit/redigo/pubsub"
-	"github.com/SteveZhangBit/redigo/rstring"
+	"github.com/SteveZhangBit/redigo/rtype/hash"
+	"github.com/SteveZhangBit/redigo/rtype/rstring"
 	"github.com/SteveZhangBit/redigo/shared"
 )
 
-const (
-	HashKey = (1 << iota)
-	HashValue
-)
+/*-----------------------------------------------------------------------------
+ * Hash type commands
+ *----------------------------------------------------------------------------*/
 
-type HashTable map[string]*rstring.RString
-
-func CheckType(c *redigo.RedigoClient, o interface{}) (ok bool) {
-	if _, ok = o.(HashTable); !ok {
-		c.AddReply(shared.WrongTypeErr)
-	}
-	return
-}
-
-func lookupWriteOrCreate(c *redigo.RedigoClient, key string) (h HashTable) {
+func hashLookupWriteOrCreate(c *redigo.RedigoClient, key string) (h *hash.HashMap) {
 	if o := c.DB.LookupKeyWrite(key); o == nil {
-		h = make(HashTable)
+		h = hash.New()
 		c.DB.Add(key, h)
 	} else {
 		var ok bool
-		if h, ok = o.(HashTable); !ok {
+		if h, ok = o.(*hash.HashMap); !ok {
 			c.AddReply(shared.WrongTypeErr)
 		}
 	}
 	return
 }
 
-/*-----------------------------------------------------------------------------
- * Hash type commands
- *----------------------------------------------------------------------------*/
-
-/* Add an element, discard the old if the key already exists.
- * Return false on insert and true on update. */
-func set(h HashTable, key string, val *rstring.RString) (update bool) {
-	_, update = h[key]
-	h[key] = val
-	return
-}
-
 func HSETCommand(c *redigo.RedigoClient) {
-	var h HashTable
-	if h = lookupWriteOrCreate(c, c.Argv[1]); h == nil {
+	var h *hash.HashMap
+	if h = hashLookupWriteOrCreate(c, c.Argv[1]); h == nil {
 		return
 	}
-	update := set(h, c.Argv[2], rstring.New(c.Argv[3]))
+	update := h.Set(c.Argv[2], rstring.New(c.Argv[3]))
 	if update {
 		c.AddReply(shared.CZero)
 	} else {
@@ -65,14 +44,14 @@ func HSETCommand(c *redigo.RedigoClient) {
 }
 
 func HSETNXCommand(c *redigo.RedigoClient) {
-	var h HashTable
-	if h = lookupWriteOrCreate(c, c.Argv[1]); h == nil {
+	var h *hash.HashMap
+	if h = hashLookupWriteOrCreate(c, c.Argv[1]); h == nil {
 		return
 	}
-	if _, ok := h[c.Argv[2]]; ok {
+	if _, ok := h.Get(c.Argv[2]); ok {
 		c.AddReply(shared.CZero)
 	} else {
-		set(h, c.Argv[2], rstring.New(c.Argv[3]))
+		h.Set(c.Argv[2], rstring.New(c.Argv[3]))
 		c.AddReply(shared.COne)
 		c.DB.SignalModifyKey(c.Argv[1])
 		pubsub.NotifyKeyspaceEvent(pubsub.NotifyHash, "hset", c.Argv[1], c.DB.ID)
@@ -81,16 +60,16 @@ func HSETNXCommand(c *redigo.RedigoClient) {
 }
 
 func HMSETCommand(c *redigo.RedigoClient) {
-	var h HashTable
+	var h *hash.HashMap
 	if c.Argc%2 == 1 {
 		c.AddReplyError("wrong number of arguments for HMSET")
 		return
 	}
-	if h = lookupWriteOrCreate(c, c.Argv[1]); h == nil {
+	if h = hashLookupWriteOrCreate(c, c.Argv[1]); h == nil {
 		return
 	}
 	for i := 2; i < c.Argc; i += 2 {
-		set(h, c.Argv[i], rstring.New(c.Argv[i+1]))
+		h.Set(c.Argv[i], rstring.New(c.Argv[i+1]))
 	}
 	c.AddReply(shared.OK)
 	c.DB.SignalModifyKey(c.Argv[1])
@@ -99,18 +78,18 @@ func HMSETCommand(c *redigo.RedigoClient) {
 }
 
 func HINCRBYCommand(c *redigo.RedigoClient) {
-	var h HashTable
+	var h *hash.HashMap
 	var val, incr int64
-	if x, ok := rstring.GetInt64FromStringOrReply(c, c.Argv[3], ""); ok {
+	if x, ok := GetInt64FromStringOrReply(c, c.Argv[3], ""); ok {
 		incr = x
 	} else {
 		return
 	}
-	if h = lookupWriteOrCreate(c, c.Argv[1]); h == nil {
+	if h = hashLookupWriteOrCreate(c, c.Argv[1]); h == nil {
 		return
 	}
-	if cur, ok := h[c.Argv[2]]; ok {
-		if val, ok = rstring.GetInt64FromStringOrReply(c, cur, "hash value is not an integer"); !ok {
+	if cur, ok := h.Get(c.Argv[2]); ok {
+		if val, ok = GetInt64FromStringOrReply(c, cur, "hash value is not an integer"); !ok {
 			return
 		}
 	}
@@ -121,7 +100,7 @@ func HINCRBYCommand(c *redigo.RedigoClient) {
 		return
 	}
 	val += incr
-	set(h, c.Argv[2], rstring.NewFromInt64(val))
+	h.Set(c.Argv[2], rstring.NewFromInt64(val))
 	c.AddReplyInt64(val)
 	c.DB.SignalModifyKey(c.Argv[1])
 	pubsub.NotifyKeyspaceEvent(pubsub.NotifyHash, "hincrby", c.Argv[1], c.DB.ID)
@@ -129,19 +108,19 @@ func HINCRBYCommand(c *redigo.RedigoClient) {
 }
 
 func HINCRBYFLOATCommand(c *redigo.RedigoClient) {
-	var h HashTable
+	var h *hash.HashMap
 	var val, incr float64
-	if x, ok := rstring.GetFloat64FromStringOrReply(c, c.Argv[3], ""); ok {
+	if x, ok := GetFloat64FromStringOrReply(c, c.Argv[3], ""); ok {
 		incr = x
 	} else {
 		return
 	}
-	if h = lookupWriteOrCreate(c, c.Argv[1]); h == nil {
+	if h = hashLookupWriteOrCreate(c, c.Argv[1]); h == nil {
 		return
 	}
 	val += incr
 	str := rstring.NewFromFloat64(val)
-	set(h, c.Argv[2], str)
+	h.Set(c.Argv[2], str)
 	c.AddReplyBulk(str.String())
 	c.DB.SignalModifyKey(c.Argv[1])
 	pubsub.NotifyKeyspaceEvent(pubsub.NotifyHash, "hincrbyfloat", c.Argv[1], c.DB.ID)
@@ -152,12 +131,12 @@ func HINCRBYFLOATCommand(c *redigo.RedigoClient) {
 	 * will not create differences in replicas or after an AOF restart. */
 }
 
-func addFieldToReply(c *redigo.RedigoClient, h HashTable, key string) {
+func hashAddFieldToReply(c *redigo.RedigoClient, h *hash.HashMap, key string) {
 	if h == nil {
 		c.AddReply(shared.NullBulk)
 		return
 	}
-	if val, ok := h[key]; !ok {
+	if val, ok := h.Get(key); !ok {
 		c.AddReply(shared.NullBulk)
 	} else {
 		c.AddReplyBulk(val.String())
@@ -165,40 +144,47 @@ func addFieldToReply(c *redigo.RedigoClient, h HashTable, key string) {
 }
 
 func HGETCommand(c *redigo.RedigoClient) {
-	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.NullBulk); o != nil && CheckType(c, o) {
-		addFieldToReply(c, o.(HashTable), c.Argv[2])
+	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.NullBulk); o != nil {
+		if h, ok := o.(*hash.HashMap); !ok {
+			c.AddReply(shared.WrongTypeErr)
+		} else {
+			hashAddFieldToReply(c, h, c.Argv[2])
+		}
 	}
 }
 
 func HMGETCommand(c *redigo.RedigoClient) {
 	/* Don't abort when the key cannot be found. Non-existing keys are empty
 	 * hashes, where HMGET should respond with a series of null bulks. */
-	if o := c.DB.LookupKeyRead(c.Argv[1]); o == nil || CheckType(c, o) {
+	o := c.DB.LookupKeyRead(c.Argv[1])
+	if h, ok := o.(*hash.HashMap); o == nil || ok {
 		c.AddReplyMultiBulkLen(c.Argc - 2)
-		h, _ := o.(HashTable)
 		for i := 2; i < c.Argc; i++ {
-			addFieldToReply(c, h, c.Argv[i])
+			hashAddFieldToReply(c, h, c.Argv[i])
 		}
+	} else {
+		c.AddReply(shared.WrongTypeErr)
 	}
 }
 
 func HDELCommand(c *redigo.RedigoClient) {
-	var h HashTable
+	var h *hash.HashMap
 	var deleted int
 	var keyremoved bool
 
-	if o := c.LookupKeyWriteOrReply(c.Argv[1], shared.CZero); o == nil || !CheckType(c, o) {
+	var ok bool
+	if o := c.LookupKeyWriteOrReply(c.Argv[1], shared.CZero); o == nil {
 		return
-	} else {
-		h = o.(HashTable)
+	} else if h, ok = o.(*hash.HashMap); !ok {
+		c.AddReply(shared.WrongTypeErr)
+		return
 	}
 
 	for i := 2; i < c.Argc; i++ {
-		key := c.Argv[i]
-		if _, ok := h[key]; ok {
-			delete(h, key)
+		if _, ok := h.Get(c.Argv[i]); ok {
+			h.Delete(c.Argv[i])
 			deleted++
-			if len(h) == 0 {
+			if h.Len() == 0 {
 				c.DB.Delete(c.Argv[1])
 				keyremoved = true
 				break
@@ -217,60 +203,69 @@ func HDELCommand(c *redigo.RedigoClient) {
 }
 
 func HLENCommand(c *redigo.RedigoClient) {
-	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.CZero); o != nil && CheckType(c, o) {
-		c.AddReplyInt64(int64(len(o.(HashTable))))
+	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.CZero); o != nil {
+		if h, ok := o.(*hash.HashMap); !ok {
+			c.AddReply(shared.WrongTypeErr)
+		} else {
+			c.AddReplyInt64(int64(h.Len()))
+		}
 	}
 }
 
-func getall(c *redigo.RedigoClient, flags int) {
-	var h HashTable
-	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.EmptyMultiBulk); o == nil || !CheckType(c, o) {
+func hashGetAll(c *redigo.RedigoClient, flags int) {
+	var h *hash.HashMap
+
+	var ok bool
+	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.CZero); o == nil {
 		return
-	} else {
-		h = o.(HashTable)
+	} else if h, ok = o.(*hash.HashMap); !ok {
+		c.AddReply(shared.WrongTypeErr)
+		return
 	}
 
 	multiplier := 0
-	if flags&HashKey > 0 {
+	if flags&hash.HashKey > 0 {
 		multiplier++
 	}
-	if flags&HashValue > 0 {
+	if flags&hash.HashValue > 0 {
 		multiplier++
 	}
-	length := len(h) * multiplier
+	length := h.Len() * multiplier
 	c.AddReplyMultiBulkLen(length)
 
 	count := 0
-	for key, val := range h {
-		if flags&HashKey > 0 {
+	h.Iterate(func(key string, val *rstring.RString) {
+		if flags&hash.HashKey > 0 {
 			count++
 			c.AddReplyBulk(key)
 		}
-		if flags&HashValue > 0 {
+		if flags&hash.HashValue > 0 {
 			count++
 			c.AddReplyBulk(val.String())
 		}
-	}
+	})
 	if count != length {
 		panic("count does not equal to length at hash get all method")
 	}
 }
 
 func HKEYSCommand(c *redigo.RedigoClient) {
-	getall(c, HashKey)
+	hashGetAll(c, hash.HashKey)
 }
 
 func HVALSCommand(c *redigo.RedigoClient) {
-	getall(c, HashValue)
+	hashGetAll(c, hash.HashValue)
 }
 
 func HGETALLCommand(c *redigo.RedigoClient) {
-	getall(c, HashKey|HashValue)
+	hashGetAll(c, hash.HashKey|hash.HashValue)
 }
 
 func HEXISTSCommand(c *redigo.RedigoClient) {
-	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.CZero); o != nil && CheckType(c, o) {
-		if _, ok := o.(HashTable)[c.Argv[2]]; ok {
+	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.CZero); o != nil {
+		if h, ok := o.(*hash.HashMap); !ok {
+			c.AddReply(shared.WrongTypeErr)
+		} else if _, ok = h.Get(c.Argv[2]); ok {
 			c.AddReply(shared.COne)
 		} else {
 			c.AddReply(shared.CZero)
