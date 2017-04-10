@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SteveZhangBit/redigo/rtype"
 	"github.com/SteveZhangBit/redigo/rtype/rstring"
 )
 
@@ -41,14 +42,14 @@ func (z ZSkiplistLevel) String() string {
 }
 
 type ZSkiplistNode struct {
-	Obj      *rstring.RString
+	Obj      rtype.String
 	Score    float64
 	Backward *ZSkiplistNode
 	Level    []ZSkiplistLevel
 }
 
 func (z *ZSkiplistNode) String() string {
-	return fmt.Sprintf("{obj: %s, score: %.3f, levels: %v}", z.Obj, z.Score, z.Level)
+	return fmt.Sprintf("{obj: %v, score: %.3f, levels: %v}", z.Obj, z.Score, z.Level)
 }
 
 type ZSkiplist struct {
@@ -90,7 +91,7 @@ func (z *ZSkiplist) randomLevel() int {
 	}
 }
 
-func (z *ZSkiplist) Insert(score float64, obj *rstring.RString) *ZSkiplistNode {
+func (z *ZSkiplist) Insert(score float64, obj rtype.String) *ZSkiplistNode {
 	var update [ZSkiplistMaxLevel]*ZSkiplistNode
 	var rank [ZSkiplistMaxLevel]uint
 
@@ -169,7 +170,7 @@ func (z *ZSkiplist) deletNode(x *ZSkiplistNode, update []*ZSkiplistNode) {
 	z.Length--
 }
 
-func (z *ZSkiplist) Delete(score float64, obj *rstring.RString) bool {
+func (z *ZSkiplist) Delete(score float64, obj rtype.String) bool {
 	var update [ZSkiplistMaxLevel]*ZSkiplistNode
 
 	x := z.Header
@@ -202,7 +203,7 @@ func (z *ZSkiplist) Delete(score float64, obj *rstring.RString) bool {
  * Returns 0 when the element cannot be found, rank otherwise.
  * Note that the rank is 1-based due to the span of zsl->header to the
  * first element. */
-func (z *ZSkiplist) GetRank(score float64, obj *rstring.RString) (rank uint) {
+func (z *ZSkiplist) GetRank(score float64, obj rtype.String) (rank uint) {
 	x := z.Header
 	for i := z.Level - 1; i >= 0; i-- {
 		for x.Level[i].Forward != nil && (x.Level[i].Forward.Score < score ||

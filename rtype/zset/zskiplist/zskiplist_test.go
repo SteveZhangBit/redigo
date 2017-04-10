@@ -2,10 +2,9 @@ package zskiplist
 
 import (
 	"fmt"
-
-	"github.com/SteveZhangBit/redigo/rstring"
-
 	"testing"
+
+	"github.com/SteveZhangBit/redigo/rtype/rstring"
 )
 
 func Test(t *testing.T) {

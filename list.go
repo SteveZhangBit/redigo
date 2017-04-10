@@ -1,8 +1,8 @@
-package command
+package redigo
 
 import (
-	"github.com/SteveZhangBit/redigo"
 	"github.com/SteveZhangBit/redigo/pubsub"
+	"github.com/SteveZhangBit/redigo/rtype"
 	"github.com/SteveZhangBit/redigo/rtype/list"
 	"github.com/SteveZhangBit/redigo/rtype/rstring"
 	"github.com/SteveZhangBit/redigo/shared"
@@ -12,13 +12,13 @@ import (
  * List Commands
  *----------------------------------------------------------------------------*/
 
-func listPush(c *redigo.RedigoClient, where int) {
-	var l *list.LinkedList
+func listPush(c *RedigoClient, where int) {
+	var l rtype.List
 	var pushed int
 
 	if o := c.DB.LookupKeyWrite(c.Argv[1]); o != nil {
 		var ok bool
-		if l, ok = o.(*list.LinkedList); !ok {
+		if l, ok = o.(rtype.List); !ok {
 			c.AddReply(shared.WrongTypeErr)
 			return
 		}
@@ -28,7 +28,7 @@ func listPush(c *redigo.RedigoClient, where int) {
 	}
 
 	for i := 2; i < c.Argc; i++ {
-		if where == list.ListHead {
+		if where == rtype.ListHead {
 			l.PushFront(rstring.New(c.Argv[i]))
 		} else {
 			l.PushBack(rstring.New(c.Argv[i]))
@@ -38,7 +38,7 @@ func listPush(c *redigo.RedigoClient, where int) {
 	c.AddReplyInt64(int64(l.Len()))
 	if pushed > 0 {
 		var e string
-		if where == list.ListHead {
+		if where == rtype.ListHead {
 			e = "lpush"
 		} else {
 			e = "rpush"
@@ -49,22 +49,22 @@ func listPush(c *redigo.RedigoClient, where int) {
 	c.Server.Dirty += pushed
 }
 
-func LPUSHCommand(c *redigo.RedigoClient) {
-	listPush(c, list.ListHead)
+func LPUSHCommand(c *RedigoClient) {
+	listPush(c, rtype.ListHead)
 }
 
-func RPUSHCommand(c *redigo.RedigoClient) {
-	listPush(c, list.ListTail)
+func RPUSHCommand(c *RedigoClient) {
+	listPush(c, rtype.ListTail)
 }
 
-func listPushx(c *redigo.RedigoClient, ref *rstring.RString, val *rstring.RString, where int) {
-	var l *list.LinkedList
-	var inserted bool = false
+func listPushx(c *RedigoClient, ref rtype.String, val rtype.String, where int) {
+	var l rtype.List
+	var inserted bool
 
 	var ok bool
 	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.CZero); o == nil {
 		return
-	} else if l, ok = o.(*list.LinkedList); !ok {
+	} else if l, ok = o.(rtype.List); !ok {
 		c.AddReply(shared.WrongTypeErr)
 		return
 	}
@@ -77,8 +77,8 @@ func listPushx(c *redigo.RedigoClient, ref *rstring.RString, val *rstring.RStrin
 
 		// Seek refval from head to tail
 		for e := l.Front(); e != nil; e = e.Next() {
-			if rstring.EqualStringObjects(e.Value.(*rstring.RString), ref) {
-				if where == list.ListTail {
+			if rstring.EqualStringObjects(e.Value(), ref) {
+				if where == rtype.ListTail {
 					l.InsertAfter(val, e)
 				} else {
 					l.InsertBefore(val, e)
@@ -97,7 +97,7 @@ func listPushx(c *redigo.RedigoClient, ref *rstring.RString, val *rstring.RStrin
 		}
 	} else {
 		var e string
-		if where == list.ListHead {
+		if where == rtype.ListHead {
 			e = "lpush"
 			l.PushFront(val)
 		} else {
@@ -111,19 +111,19 @@ func listPushx(c *redigo.RedigoClient, ref *rstring.RString, val *rstring.RStrin
 	c.AddReplyInt64(int64(l.Len()))
 }
 
-func LINSERTCommand(c *redigo.RedigoClient) {
+func LINSERTCommand(c *RedigoClient) {
 	if string(c.Argv[2]) == "after" {
-		listPushx(c, rstring.New(c.Argv[3]), rstring.New(c.Argv[4]), list.ListTail)
+		listPushx(c, rstring.New(c.Argv[3]), rstring.New(c.Argv[4]), rtype.ListTail)
 	} else if string(c.Argv[2]) == "before" {
-		listPushx(c, rstring.New(c.Argv[3]), rstring.New(c.Argv[4]), list.ListHead)
+		listPushx(c, rstring.New(c.Argv[3]), rstring.New(c.Argv[4]), rtype.ListHead)
 	} else {
 		c.AddReply(shared.SyntaxErr)
 	}
 }
 
-func LLENCommand(c *redigo.RedigoClient) {
+func LLENCommand(c *RedigoClient) {
 	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.CZero); o != nil {
-		if l, ok := o.(*list.LinkedList); !ok {
+		if l, ok := o.(rtype.List); !ok {
 			c.AddReply(shared.WrongTypeErr)
 		} else {
 			c.AddReplyInt64(int64(l.Len()))
@@ -131,13 +131,13 @@ func LLENCommand(c *redigo.RedigoClient) {
 	}
 }
 
-func LINDEXCommand(c *redigo.RedigoClient) {
-	var l *list.LinkedList
+func LINDEXCommand(c *RedigoClient) {
+	var l rtype.List
 
 	var ok bool
 	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.NullBulk); o == nil {
 		return
-	} else if l, ok = o.(*list.LinkedList); !ok {
+	} else if l, ok = o.(rtype.List); !ok {
 		c.AddReply(shared.WrongTypeErr)
 		return
 	}
@@ -145,21 +145,21 @@ func LINDEXCommand(c *redigo.RedigoClient) {
 	if index, ok := GetInt64FromStringOrReply(c, c.Argv[2], ""); ok {
 		e := l.Index(int(index))
 		if e != nil {
-			c.AddReplyBulk(e.Value.(*rstring.RString).String())
+			c.AddReplyBulk(e.Value().String())
 		} else {
 			c.AddReply(shared.NullBulk)
 		}
 	}
 }
 
-func LSETCommand(c *redigo.RedigoClient) {
-	var l *list.LinkedList
+func LSETCommand(c *RedigoClient) {
+	var l rtype.List
 	var index int
 
 	var ok bool
 	if o := c.LookupKeyWriteOrReply(c.Argv[1], shared.NoKeyErr); o == nil {
 		return
-	} else if l, ok = o.(*list.LinkedList); !ok {
+	} else if l, ok = o.(rtype.List); !ok {
 		c.AddReply(shared.WrongTypeErr)
 		return
 	}
@@ -172,7 +172,7 @@ func LSETCommand(c *redigo.RedigoClient) {
 
 	e := l.Index(index)
 	if e != nil {
-		e.Value = rstring.New(c.Argv[3])
+		e.SetValue(rstring.New(c.Argv[3]))
 		c.AddReply(shared.OK)
 		c.DB.SignalModifyKey(c.Argv[1])
 		pubsub.NotifyKeyspaceEvent(pubsub.NotifyList, "lset", c.Argv[1], c.DB.ID)
@@ -182,20 +182,20 @@ func LSETCommand(c *redigo.RedigoClient) {
 	}
 }
 
-func listPop(c *redigo.RedigoClient, where int) {
-	var l *list.LinkedList
+func listPop(c *RedigoClient, where int) {
+	var l rtype.List
 
 	var ok bool
 	if o := c.LookupKeyWriteOrReply(c.Argv[1], shared.NullBulk); o == nil {
 		return
-	} else if l, ok = o.(*list.LinkedList); !ok {
+	} else if l, ok = o.(rtype.List); !ok {
 		c.AddReply(shared.WrongTypeErr)
 		return
 	}
 
 	var event string
-	var e *list.Element
-	if where == list.ListHead {
+	var e rtype.ListElement
+	if where == rtype.ListHead {
 		event = "lpop"
 		e = l.PopFront()
 	} else {
@@ -205,7 +205,7 @@ func listPop(c *redigo.RedigoClient, where int) {
 	if e == nil {
 		c.AddReply(shared.NullBulk)
 	} else {
-		c.AddReplyBulk(e.Value.(*rstring.RString).String())
+		c.AddReplyBulk(e.Value().String())
 		pubsub.NotifyKeyspaceEvent(pubsub.NotifyList, event, c.Argv[1], c.DB.ID)
 		if l.Len() == 0 {
 			pubsub.NotifyKeyspaceEvent(pubsub.NotifyGeneric, "del", c.Argv[1], c.DB.ID)
@@ -216,20 +216,20 @@ func listPop(c *redigo.RedigoClient, where int) {
 	}
 }
 
-func LPOPCommand(c *redigo.RedigoClient) {
-	listPop(c, list.ListHead)
+func LPOPCommand(c *RedigoClient) {
+	listPop(c, rtype.ListHead)
 }
 
-func RPOPCommand(c *redigo.RedigoClient) {
-	listPop(c, list.ListTail)
+func RPOPCommand(c *RedigoClient) {
+	listPop(c, rtype.ListTail)
 }
 
-func LRANGECommand(c *redigo.RedigoClient) {
+func LRANGECommand(c *RedigoClient) {
 
 }
 
-func LTRIMCommand(c *redigo.RedigoClient) {
-	var l *list.LinkedList
+func LTRIMCommand(c *RedigoClient) {
+	var l rtype.List
 	var start, end, llen int
 
 	if x, ok := GetInt64FromStringOrReply(c, c.Argv[2], ""); !ok {
@@ -244,7 +244,7 @@ func LTRIMCommand(c *redigo.RedigoClient) {
 	var ok bool
 	if o := c.LookupKeyWriteOrReply(c.Argv[1], shared.OK); o == nil {
 		return
-	} else if l, ok = o.(*list.LinkedList); !ok {
+	} else if l, ok = o.(rtype.List); !ok {
 		c.AddReply(shared.WrongTypeErr)
 		return
 	}
@@ -301,8 +301,8 @@ func LTRIMCommand(c *redigo.RedigoClient) {
  * count = 0: Remove all elements equal to value.
  * For example, LREM list -2 "hello" will remove the last two occurrences of "hello" in the list stored at list.
  * Note that non-existing keys are treated like empty lists, so when key does not exist, the command will always return 0.*/
-func LREMCommand(c *redigo.RedigoClient) {
-	var l *list.LinkedList
+func LREMCommand(c *RedigoClient) {
+	var l rtype.List
 	var toremove int
 
 	if x, ok := GetInt64FromStringOrReply(c, c.Argv[2], ""); !ok {
@@ -314,7 +314,7 @@ func LREMCommand(c *redigo.RedigoClient) {
 	var ok bool
 	if o := c.LookupKeyWriteOrReply(c.Argv[1], shared.CZero); o == nil {
 		return
-	} else if l, ok = o.(*list.LinkedList); !ok {
+	} else if l, ok = o.(rtype.List); !ok {
 		c.AddReply(shared.WrongTypeErr)
 		return
 	}
@@ -324,7 +324,7 @@ func LREMCommand(c *redigo.RedigoClient) {
 	if toremove < 0 {
 		toremove = -toremove
 		for e := l.Back(); e != nil; e = e.Prev() {
-			if rstring.EqualStringObjects(e.Value.(*rstring.RString), val) {
+			if rstring.EqualStringObjects(e.Value(), val) {
 				l.Remove(e)
 				c.Server.Dirty++
 				removed++
@@ -335,7 +335,7 @@ func LREMCommand(c *redigo.RedigoClient) {
 		}
 	} else {
 		for e := l.Front(); e != nil; e = e.Next() {
-			if rstring.EqualStringObjects(e.Value.(*rstring.RString), val) {
+			if rstring.EqualStringObjects(e.Value(), val) {
 				l.Remove(e)
 				c.Server.Dirty++
 				removed++
@@ -354,18 +354,18 @@ func LREMCommand(c *redigo.RedigoClient) {
 	}
 }
 
-func RPPOPLPUSHCommand(c *redigo.RedigoClient) {
+func RPPOPLPUSHCommand(c *RedigoClient) {
 
 }
 
-func BLPOPCommand(c *redigo.RedigoClient) {
+func BLPOPCommand(c *RedigoClient) {
 
 }
 
-func BRPOPCommand(c *redigo.RedigoClient) {
+func BRPOPCommand(c *RedigoClient) {
 
 }
 
-func BRPOPLPUSHCommand(c *redigo.RedigoClient) {
+func BRPOPLPUSHCommand(c *RedigoClient) {
 
 }

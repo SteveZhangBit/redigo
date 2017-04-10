@@ -1,46 +1,34 @@
 package hash
 
-import "github.com/SteveZhangBit/redigo/rtype/rstring"
+import "github.com/SteveZhangBit/redigo/rtype"
 
-const (
-	HashKey = (1 << iota)
-	HashValue
-)
+type BasicMap map[string]rtype.String
 
-type basicMap map[string]*rstring.RString
-
-type HashMap struct {
-	Val interface{}
-}
-
-func New() *HashMap {
-	return &HashMap{Val: make(basicMap)}
-}
-
-/* Add an element, discard the old if the key already exists.
- * Return false on insert and true on update. */
-func (h *HashMap) Set(key string, val *rstring.RString) (update bool) {
-	m := h.Val.(basicMap)
-	_, update = m[key]
-	m[key] = val
+func (b BasicMap) Set(key string, val rtype.String) (update bool) {
+	_, update = b[key]
+	b[key] = val
 	return
 }
 
-func (h *HashMap) Get(key string) (val *rstring.RString, ok bool) {
-	val, ok = h.Val.(basicMap)[key]
+func (b BasicMap) Get(key string) (val rtype.String, ok bool) {
+	val, ok = b[key]
 	return
 }
 
-func (h *HashMap) Delete(key string) {
-	delete(h.Val.(basicMap), key)
+func (b BasicMap) Delete(key string) {
+	delete(b, key)
 }
 
-func (h *HashMap) Len() int {
-	return len(h.Val.(basicMap))
+func (b BasicMap) Len() int {
+	return len(b)
 }
 
-func (h *HashMap) Iterate(iterf func(key string, val *rstring.RString)) {
-	for key, val := range h.Val.(basicMap) {
+func (b BasicMap) Iterate(iterf func(key string, val rtype.String)) {
+	for key, val := range b {
 		iterf(key, val)
 	}
+}
+
+func New() rtype.HashMap {
+	return make(BasicMap)
 }
