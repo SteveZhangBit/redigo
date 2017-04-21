@@ -4,7 +4,6 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/SteveZhangBit/redigo/pubsub"
 	"github.com/SteveZhangBit/redigo/rtype"
 	"github.com/SteveZhangBit/redigo/rtype/rstring"
 	"github.com/SteveZhangBit/redigo/shared"
@@ -89,7 +88,7 @@ func CheckStringlength(c *RedigoClient, size int64) bool {
 func SETCommand(c *RedigoClient) {
 	c.DB.SetKeyPersist(c.Argv[1], rstring.New(c.Argv[2]))
 	c.Server.Dirty++
-	pubsub.NotifyKeyspaceEvent(pubsub.NotifyString, "set", c.Argv[1], c.DB.ID)
+	NotifyKeyspaceEvent(REDIS_NOTIFY_STRING, "set", c.Argv[1], c.DB.ID)
 	c.AddReply(shared.OK)
 }
 
@@ -105,15 +104,11 @@ func PSETEXCommand(c *RedigoClient) {
 
 }
 
-func GETSETCommand(c *RedigoClient) {
+func SETRANGECommand(c *RedigoClient) {
 
 }
 
-func SetRangeCommand(c *RedigoClient) {
-
-}
-
-func GetRangeCommand(c *RedigoClient) {
+func GETRANGECommand(c *RedigoClient) {
 
 }
 
@@ -129,7 +124,7 @@ func MSETNXCommand(c *RedigoClient) {
 
 }
 
-func GETCommand(c *RedigoClient) bool {
+func rstringGet(c *RedigoClient) bool {
 	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.NullBulk); o == nil {
 		return true
 	} else if str, ok := o.(rtype.String); !ok {
@@ -138,6 +133,18 @@ func GETCommand(c *RedigoClient) bool {
 	} else {
 		c.AddReplyBulk(str.String())
 		return true
+	}
+}
+
+func GETCommand(c *RedigoClient) {
+	rstringGet(c)
+}
+
+func GETSETCommand(c *RedigoClient) {
+	if rstringGet(c) {
+		c.DB.SetKeyPersist(c.Argv[1], rstring.New(c.Argv[2]))
+		NotifyKeyspaceEvent(REDIS_NOTIFY_STRING, "set", c.Argv[1], c.DB.ID)
+		c.Server.Dirty++
 	}
 }
 
@@ -169,7 +176,7 @@ func INCRBYFLOATCommand(c *RedigoClient) {
 		}
 
 		c.DB.SignalModifyKey(c.Argv[1])
-		pubsub.NotifyKeyspaceEvent(pubsub.NotifyString, "incrbyfloat", c.Argv[1], c.DB.ID)
+		NotifyKeyspaceEvent(REDIS_NOTIFY_STRING, "incrbyfloat", c.Argv[1], c.DB.ID)
 		c.Server.Dirty++
 		c.AddReplyBulk(str.String())
 
@@ -207,7 +214,7 @@ func strIncrDecr(c *RedigoClient, incr int64) {
 		}
 
 		c.DB.SignalModifyKey(c.Argv[1])
-		pubsub.NotifyKeyspaceEvent(pubsub.NotifyString, "incrby", c.Argv[1], c.DB.ID)
+		NotifyKeyspaceEvent(REDIS_NOTIFY_STRING, "incrby", c.Argv[1], c.DB.ID)
 		c.Server.Dirty++
 		c.AddReply(shared.Colon)
 		c.AddReply(str.String())
@@ -256,7 +263,7 @@ func APPENDCommand(c *RedigoClient) {
 		str.Append(c.Argv[2])
 	}
 	c.DB.SignalModifyKey(c.Argv[1])
-	pubsub.NotifyKeyspaceEvent(pubsub.NotifyString, "append", c.Argv[1], c.DB.ID)
+	NotifyKeyspaceEvent(REDIS_NOTIFY_STRING, "append", c.Argv[1], c.DB.ID)
 	c.Server.Dirty++
 	c.AddReplyInt64(totallen)
 }

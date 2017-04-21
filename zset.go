@@ -1,7 +1,6 @@
 package redigo
 
 import (
-	"github.com/SteveZhangBit/redigo/pubsub"
 	"github.com/SteveZhangBit/redigo/rtype"
 	"github.com/SteveZhangBit/redigo/rtype/rstring"
 	"github.com/SteveZhangBit/redigo/rtype/zset"
@@ -71,7 +70,7 @@ func ZADDCommand(c *RedigoClient) {
 	c.AddReplyInt64(added + updated)
 	if added > 0 || updated > 0 {
 		c.DB.SignalModifyKey(c.Argv[1])
-		pubsub.NotifyKeyspaceEvent(pubsub.NotifyZSet, "zadd", c.Argv[1], c.DB.ID)
+		NotifyKeyspaceEvent(REDIS_NOTIFY_ZSET, "zadd", c.Argv[1], c.DB.ID)
 	}
 }
 
@@ -106,9 +105,9 @@ func ZREMCommand(c *RedigoClient) {
 	}
 
 	if deleted > 0 {
-		pubsub.NotifyKeyspaceEvent(pubsub.NotifyZSet, "zrem", c.Argv[1], c.DB.ID)
+		NotifyKeyspaceEvent(REDIS_NOTIFY_ZSET, "zrem", c.Argv[1], c.DB.ID)
 		if keyremoved {
-			pubsub.NotifyKeyspaceEvent(pubsub.NotifyGeneric, "del", c.Argv[1], c.DB.ID)
+			NotifyKeyspaceEvent(REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB.ID)
 		}
 		c.DB.SignalModifyKey(c.Argv[1])
 		c.Server.Dirty++
@@ -247,7 +246,7 @@ func ZRANGEBYSCORECommand(c *RedigoClient) {
 
 }
 
-func ZREVRANGESCORECommand(c *RedigoClient) {
+func ZREVRANGEBYSCORECommand(c *RedigoClient) {
 
 }
 

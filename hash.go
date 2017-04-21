@@ -3,7 +3,6 @@ package redigo
 import (
 	"math"
 
-	"github.com/SteveZhangBit/redigo/pubsub"
 	"github.com/SteveZhangBit/redigo/rtype"
 	"github.com/SteveZhangBit/redigo/rtype/hash"
 	"github.com/SteveZhangBit/redigo/rtype/rstring"
@@ -39,7 +38,7 @@ func HSETCommand(c *RedigoClient) {
 		c.AddReply(shared.COne)
 	}
 	c.DB.SignalModifyKey(c.Argv[1])
-	pubsub.NotifyKeyspaceEvent(pubsub.NotifyHash, "hset", c.Argv[1], c.DB.ID)
+	NotifyKeyspaceEvent(REDIS_NOTIFY_HASH, "hset", c.Argv[1], c.DB.ID)
 	c.Server.Dirty++
 }
 
@@ -54,7 +53,7 @@ func HSETNXCommand(c *RedigoClient) {
 		h.Set(c.Argv[2], rstring.New(c.Argv[3]))
 		c.AddReply(shared.COne)
 		c.DB.SignalModifyKey(c.Argv[1])
-		pubsub.NotifyKeyspaceEvent(pubsub.NotifyHash, "hset", c.Argv[1], c.DB.ID)
+		NotifyKeyspaceEvent(REDIS_NOTIFY_HASH, "hset", c.Argv[1], c.DB.ID)
 		c.Server.Dirty++
 	}
 }
@@ -73,7 +72,7 @@ func HMSETCommand(c *RedigoClient) {
 	}
 	c.AddReply(shared.OK)
 	c.DB.SignalModifyKey(c.Argv[1])
-	pubsub.NotifyKeyspaceEvent(pubsub.NotifyHash, "hset", c.Argv[1], c.DB.ID)
+	NotifyKeyspaceEvent(REDIS_NOTIFY_HASH, "hset", c.Argv[1], c.DB.ID)
 	c.Server.Dirty++
 }
 
@@ -103,7 +102,7 @@ func HINCRBYCommand(c *RedigoClient) {
 	h.Set(c.Argv[2], rstring.NewFromInt64(val))
 	c.AddReplyInt64(val)
 	c.DB.SignalModifyKey(c.Argv[1])
-	pubsub.NotifyKeyspaceEvent(pubsub.NotifyHash, "hincrby", c.Argv[1], c.DB.ID)
+	NotifyKeyspaceEvent(REDIS_NOTIFY_HASH, "hincrby", c.Argv[1], c.DB.ID)
 	c.Server.Dirty++
 }
 
@@ -123,7 +122,7 @@ func HINCRBYFLOATCommand(c *RedigoClient) {
 	h.Set(c.Argv[2], str)
 	c.AddReplyBulk(str.String())
 	c.DB.SignalModifyKey(c.Argv[1])
-	pubsub.NotifyKeyspaceEvent(pubsub.NotifyHash, "hincrbyfloat", c.Argv[1], c.DB.ID)
+	NotifyKeyspaceEvent(REDIS_NOTIFY_HASH, "hincrbyfloat", c.Argv[1], c.DB.ID)
 	c.Server.Dirty++
 
 	/* TODO: Always replicate HINCRBYFLOAT as an HSET command with the final value
@@ -193,9 +192,9 @@ func HDELCommand(c *RedigoClient) {
 	}
 	if deleted > 0 {
 		c.DB.SignalModifyKey(c.Argv[1])
-		pubsub.NotifyKeyspaceEvent(pubsub.NotifyHash, "hdel", c.Argv[1], c.DB.ID)
+		NotifyKeyspaceEvent(REDIS_NOTIFY_HASH, "hdel", c.Argv[1], c.DB.ID)
 		if keyremoved {
-			pubsub.NotifyKeyspaceEvent(pubsub.NotifyGeneric, "del", c.Argv[1], c.DB.ID)
+			NotifyKeyspaceEvent(REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB.ID)
 		}
 		c.Server.Dirty += deleted
 	}
@@ -224,10 +223,10 @@ func hashGetAll(c *RedigoClient, flags int) {
 	}
 
 	multiplier := 0
-	if flags&rtype.HashKey > 0 {
+	if flags&rtype.REDIS_HASH_KEY > 0 {
 		multiplier++
 	}
-	if flags&rtype.HashValue > 0 {
+	if flags&rtype.REDIS_HASH_VALUE > 0 {
 		multiplier++
 	}
 	length := h.Len() * multiplier
@@ -235,11 +234,11 @@ func hashGetAll(c *RedigoClient, flags int) {
 
 	count := 0
 	h.Iterate(func(key string, val rtype.String) {
-		if flags&rtype.HashKey > 0 {
+		if flags&rtype.REDIS_HASH_KEY > 0 {
 			count++
 			c.AddReplyBulk(key)
 		}
-		if flags&rtype.HashValue > 0 {
+		if flags&rtype.REDIS_HASH_VALUE > 0 {
 			count++
 			c.AddReplyBulk(val.String())
 		}
@@ -250,15 +249,15 @@ func hashGetAll(c *RedigoClient, flags int) {
 }
 
 func HKEYSCommand(c *RedigoClient) {
-	hashGetAll(c, rtype.HashKey)
+	hashGetAll(c, rtype.REDIS_HASH_KEY)
 }
 
 func HVALSCommand(c *RedigoClient) {
-	hashGetAll(c, rtype.HashValue)
+	hashGetAll(c, rtype.REDIS_HASH_VALUE)
 }
 
 func HGETALLCommand(c *RedigoClient) {
-	hashGetAll(c, rtype.HashKey|rtype.HashValue)
+	hashGetAll(c, rtype.REDIS_HASH_KEY|rtype.REDIS_HASH_VALUE)
 }
 
 func HEXISTSCommand(c *RedigoClient) {

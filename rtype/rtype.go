@@ -1,13 +1,13 @@
 package rtype
 
 const (
-	HashKey = (1 << iota)
-	HashValue
+	REDIS_HASH_KEY = (1 << iota)
+	REDIS_HASH_VALUE
 )
 
 const (
-	ListTail = 0
-	ListHead = 1
+	REDIS_LIST_TAIL = 0
+	REDIS_LIST_HEAD = 1
 )
 
 type HashMap interface {

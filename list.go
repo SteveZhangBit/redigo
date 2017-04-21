@@ -1,7 +1,6 @@
 package redigo
 
 import (
-	"github.com/SteveZhangBit/redigo/pubsub"
 	"github.com/SteveZhangBit/redigo/rtype"
 	"github.com/SteveZhangBit/redigo/rtype/list"
 	"github.com/SteveZhangBit/redigo/rtype/rstring"
@@ -28,7 +27,7 @@ func listPush(c *RedigoClient, where int) {
 	}
 
 	for i := 2; i < c.Argc; i++ {
-		if where == rtype.ListHead {
+		if where == rtype.REDIS_LIST_HEAD {
 			l.PushFront(rstring.New(c.Argv[i]))
 		} else {
 			l.PushBack(rstring.New(c.Argv[i]))
@@ -38,23 +37,23 @@ func listPush(c *RedigoClient, where int) {
 	c.AddReplyInt64(int64(l.Len()))
 	if pushed > 0 {
 		var e string
-		if where == rtype.ListHead {
+		if where == rtype.REDIS_LIST_HEAD {
 			e = "lpush"
 		} else {
 			e = "rpush"
 		}
 		c.DB.SignalModifyKey(c.Argv[1])
-		pubsub.NotifyKeyspaceEvent(pubsub.NotifyList, e, c.Argv[1], c.DB.ID)
+		NotifyKeyspaceEvent(REDIS_NOTIFY_LIST, e, c.Argv[1], c.DB.ID)
 	}
 	c.Server.Dirty += pushed
 }
 
 func LPUSHCommand(c *RedigoClient) {
-	listPush(c, rtype.ListHead)
+	listPush(c, rtype.REDIS_LIST_HEAD)
 }
 
 func RPUSHCommand(c *RedigoClient) {
-	listPush(c, rtype.ListTail)
+	listPush(c, rtype.REDIS_LIST_TAIL)
 }
 
 func listPushx(c *RedigoClient, ref rtype.String, val rtype.String, where int) {
@@ -78,7 +77,7 @@ func listPushx(c *RedigoClient, ref rtype.String, val rtype.String, where int) {
 		// Seek refval from head to tail
 		for e := l.Front(); e != nil; e = e.Next() {
 			if rstring.EqualStringObjects(e.Value(), ref) {
-				if where == rtype.ListTail {
+				if where == rtype.REDIS_LIST_TAIL {
 					l.InsertAfter(val, e)
 				} else {
 					l.InsertBefore(val, e)
@@ -89,7 +88,7 @@ func listPushx(c *RedigoClient, ref rtype.String, val rtype.String, where int) {
 
 		if inserted {
 			c.DB.SignalModifyKey(c.Argv[1])
-			pubsub.NotifyKeyspaceEvent(pubsub.NotifyList, "linsert", c.Argv[1], c.DB.ID)
+			NotifyKeyspaceEvent(REDIS_NOTIFY_LIST, "linsert", c.Argv[1], c.DB.ID)
 			c.Server.Dirty++
 		} else {
 			c.AddReply(shared.CNegOne)
@@ -97,7 +96,7 @@ func listPushx(c *RedigoClient, ref rtype.String, val rtype.String, where int) {
 		}
 	} else {
 		var e string
-		if where == rtype.ListHead {
+		if where == rtype.REDIS_LIST_HEAD {
 			e = "lpush"
 			l.PushFront(val)
 		} else {
@@ -105,17 +104,25 @@ func listPushx(c *RedigoClient, ref rtype.String, val rtype.String, where int) {
 			l.PushBack(val)
 		}
 		c.DB.SignalModifyKey(c.Argv[1])
-		pubsub.NotifyKeyspaceEvent(pubsub.NotifyList, e, c.Argv[1], c.DB.ID)
+		NotifyKeyspaceEvent(REDIS_NOTIFY_LIST, e, c.Argv[1], c.DB.ID)
 		c.Server.Dirty++
 	}
 	c.AddReplyInt64(int64(l.Len()))
 }
 
+func LPUSHXCommand(c *RedigoClient) {
+	listPushx(c, nil, rstring.New(c.Argv[2]), rtype.REDIS_LIST_HEAD)
+}
+
+func RPUSHXCommand(c *RedigoClient) {
+	listPushx(c, nil, rstring.New(c.Argv[2]), rtype.REDIS_LIST_TAIL)
+}
+
 func LINSERTCommand(c *RedigoClient) {
 	if string(c.Argv[2]) == "after" {
-		listPushx(c, rstring.New(c.Argv[3]), rstring.New(c.Argv[4]), rtype.ListTail)
+		listPushx(c, rstring.New(c.Argv[3]), rstring.New(c.Argv[4]), rtype.REDIS_LIST_TAIL)
 	} else if string(c.Argv[2]) == "before" {
-		listPushx(c, rstring.New(c.Argv[3]), rstring.New(c.Argv[4]), rtype.ListHead)
+		listPushx(c, rstring.New(c.Argv[3]), rstring.New(c.Argv[4]), rtype.REDIS_LIST_HEAD)
 	} else {
 		c.AddReply(shared.SyntaxErr)
 	}
@@ -175,7 +182,7 @@ func LSETCommand(c *RedigoClient) {
 		e.SetValue(rstring.New(c.Argv[3]))
 		c.AddReply(shared.OK)
 		c.DB.SignalModifyKey(c.Argv[1])
-		pubsub.NotifyKeyspaceEvent(pubsub.NotifyList, "lset", c.Argv[1], c.DB.ID)
+		NotifyKeyspaceEvent(REDIS_NOTIFY_LIST, "lset", c.Argv[1], c.DB.ID)
 		c.Server.Dirty++
 	} else {
 		c.AddReply(shared.OutOfRangeErr)
@@ -195,7 +202,7 @@ func listPop(c *RedigoClient, where int) {
 
 	var event string
 	var e rtype.ListElement
-	if where == rtype.ListHead {
+	if where == rtype.REDIS_LIST_HEAD {
 		event = "lpop"
 		e = l.PopFront()
 	} else {
@@ -206,9 +213,9 @@ func listPop(c *RedigoClient, where int) {
 		c.AddReply(shared.NullBulk)
 	} else {
 		c.AddReplyBulk(e.Value().String())
-		pubsub.NotifyKeyspaceEvent(pubsub.NotifyList, event, c.Argv[1], c.DB.ID)
+		NotifyKeyspaceEvent(REDIS_NOTIFY_LIST, event, c.Argv[1], c.DB.ID)
 		if l.Len() == 0 {
-			pubsub.NotifyKeyspaceEvent(pubsub.NotifyGeneric, "del", c.Argv[1], c.DB.ID)
+			NotifyKeyspaceEvent(REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB.ID)
 			c.DB.Delete(c.Argv[1])
 		}
 		c.DB.SignalModifyKey(c.Argv[1])
@@ -217,11 +224,11 @@ func listPop(c *RedigoClient, where int) {
 }
 
 func LPOPCommand(c *RedigoClient) {
-	listPop(c, rtype.ListHead)
+	listPop(c, rtype.REDIS_LIST_HEAD)
 }
 
 func RPOPCommand(c *RedigoClient) {
-	listPop(c, rtype.ListTail)
+	listPop(c, rtype.REDIS_LIST_TAIL)
 }
 
 func LRANGECommand(c *RedigoClient) {
@@ -285,10 +292,10 @@ func LTRIMCommand(c *RedigoClient) {
 		l.Remove(e)
 	}
 
-	pubsub.NotifyKeyspaceEvent(pubsub.NotifyList, "ltrim", c.Argv[1], c.DB.ID)
+	NotifyKeyspaceEvent(REDIS_NOTIFY_LIST, "ltrim", c.Argv[1], c.DB.ID)
 	if l.Len() == 0 {
 		c.DB.Delete(c.Argv[1])
-		pubsub.NotifyKeyspaceEvent(pubsub.NotifyGeneric, "del", c.Argv[1], c.DB.ID)
+		NotifyKeyspaceEvent(REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB.ID)
 	}
 	c.DB.SignalModifyKey(c.Argv[1])
 	c.Server.Dirty++
@@ -354,7 +361,7 @@ func LREMCommand(c *RedigoClient) {
 	}
 }
 
-func RPPOPLPUSHCommand(c *RedigoClient) {
+func RPOPLPUSHCommand(c *RedigoClient) {
 
 }
 

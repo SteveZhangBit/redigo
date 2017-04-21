@@ -1,7 +1,6 @@
 package redigo
 
 import (
-	"github.com/SteveZhangBit/redigo/pubsub"
 	"github.com/SteveZhangBit/redigo/rtype"
 	"github.com/SteveZhangBit/redigo/rtype/rstring"
 	"github.com/SteveZhangBit/redigo/rtype/set"
@@ -30,7 +29,7 @@ func SADDCommand(c *RedigoClient) {
 	}
 	if added > 0 {
 		c.DB.SignalModifyKey(c.Argv[1])
-		pubsub.NotifyKeyspaceEvent(pubsub.NotifySet, "sadd", c.Argv[1], c.DB.ID)
+		NotifyKeyspaceEvent(REDIS_NOTIFY_SET, "sadd", c.Argv[1], c.DB.ID)
 	}
 	c.Server.Dirty += added
 	c.AddReplyInt64(int64(added))
@@ -61,9 +60,9 @@ func SREMCommand(c *RedigoClient) {
 	}
 	if deleted > 0 {
 		c.DB.SignalModifyKey(c.Argv[1])
-		pubsub.NotifyKeyspaceEvent(pubsub.NotifySet, "srem", c.Argv[1], c.DB.ID)
+		NotifyKeyspaceEvent(REDIS_NOTIFY_SET, "srem", c.Argv[1], c.DB.ID)
 		if keyremoved {
-			pubsub.NotifyKeyspaceEvent(pubsub.NotifyGeneric, "del", c.Argv[1], c.DB.ID)
+			NotifyKeyspaceEvent(REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB.ID)
 		}
 		c.Server.Dirty += deleted
 	}
@@ -115,14 +114,14 @@ func SPOPCommand(c *RedigoClient) {
 
 	e := s.RandomElement()
 	s.Remove(e)
-	pubsub.NotifyKeyspaceEvent(pubsub.NotifySet, "spop", c.Argv[1], c.DB.ID)
+	NotifyKeyspaceEvent(REDIS_NOTIFY_SET, "spop", c.Argv[1], c.DB.ID)
 
 	// TODO: Replicate/AOF this command as an SREM operation
 
 	c.AddReplyBulk(e.String())
 	if s.Size() == 0 {
 		c.DB.Delete(c.Argv[1])
-		pubsub.NotifyKeyspaceEvent(pubsub.NotifyGeneric, "del", c.Argv[1], c.DB.ID)
+		NotifyKeyspaceEvent(REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB.ID)
 	}
 	c.DB.SignalModifyKey(c.Argv[1])
 	c.Server.Dirty++

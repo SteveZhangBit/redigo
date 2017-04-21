@@ -9,6 +9,7 @@ const (
 	CNegOne        = ":-1\r\n"
 	NullBulk       = "$-1\r\n"
 	EmptyMultiBulk = "*0\r\n"
+	Pong           = "+PONG\r\n"
 	WrongTypeErr   = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n"
 	Colon          = ":"
 	SyntaxErr      = "-ERR syntax error\r\n"
