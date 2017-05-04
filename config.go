@@ -1,5 +1,5 @@
 package redigo
 
-func CONFIGCommand(c *RedigoClient) {
+func CONFIGCommand(c CommandArg) {
 
 }

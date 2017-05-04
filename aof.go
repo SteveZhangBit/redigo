@@ -1,5 +1,5 @@
 package redigo
 
-func BGREWRITEAOFCommand(c *RedigoClient) {
+func BGREWRITEAOFCommand(c CommandArg) {
 
 }

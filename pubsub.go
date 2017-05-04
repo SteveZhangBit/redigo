@@ -17,26 +17,26 @@ func NotifyKeyspaceEvent(t int, event string, key string, dbid int) {
  * Pubsub commands implementation
  *----------------------------------------------------------------------------*/
 
-func SUBSCRIBECommand(c *RedigoClient) {
+func SUBSCRIBECommand(c CommandArg) {
 
 }
 
-func UNSUBSCRIBECommand(c *RedigoClient) {
+func UNSUBSCRIBECommand(c CommandArg) {
 
 }
 
-func PSUBSCRIBECommand(c *RedigoClient) {
+func PSUBSCRIBECommand(c CommandArg) {
 
 }
 
-func PUNSUBSCRIBECommand(c *RedigoClient) {
+func PUNSUBSCRIBECommand(c CommandArg) {
 
 }
 
-func PUBLISHCommand(c *RedigoClient) {
+func PUBLISHCommand(c CommandArg) {
 
 }
 
-func PUBSUBCommand(c *RedigoClient) {
+func PUBSUBCommand(c CommandArg) {
 
 }

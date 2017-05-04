@@ -1,9 +1,9 @@
 package redigo
 
-func SAVECommand(c *RedigoClient) {
+func SAVECommand(c CommandArg) {
 
 }
 
-func BGSAVECommand(c *RedigoClient) {
+func BGSAVECommand(c CommandArg) {
 
 }

@@ -71,7 +71,7 @@ const (
  */
 type RedigoCommand struct {
 	Name         string
-	Proc         func(c *RedigoClient)
+	Proc         func(c CommandArg)
 	Arity        int
 	SFlags       string
 	Flags        int
@@ -270,11 +270,12 @@ type RedigoServer struct {
 	listeners []net.Listener
 	newClient chan *RedigoClient
 	delClient chan *RedigoClient
+	closed    chan bool
 	// Logging
 	Verbosity int
 	// Command
 	Command    map[string]*RedigoCommand
-	nextToProc chan *RedigoClient
+	nextToProc chan CommandArg
 	// DB
 	DBs   []*RedigoDB
 	DBNum int
@@ -297,8 +298,9 @@ func NewServer() *RedigoServer {
 		BindAddr:   []string{""},
 		newClient:  make(chan *RedigoClient, 1),
 		delClient:  make(chan *RedigoClient, 1),
+		closed:     make(chan bool),
 		Verbosity:  REDIS_DEBUG,
-		nextToProc: make(chan *RedigoClient, 1),
+		nextToProc: make(chan CommandArg, 1),
 		DBNum:      4,
 	}
 	s.PopulateCommandTable()
@@ -369,9 +371,30 @@ func (r *RedigoServer) Init() {
 	// A few stats we don't want to reset: server startup time, and peak mem.
 	r.StatStartTime = time.Now()
 
-	// Waiting to process commands
-	for c := range r.nextToProc {
-		r.ProcessCommand(c)
+	// Waiting to process commands, add clients or remove closed clients
+	for {
+		select {
+		case c := <-r.newClient:
+			r.RedigoLog(REDIS_DEBUG, "New connection on %s", c.Conn.RemoteAddr())
+			r.Clients.PushBack(c)
+
+		case c := <-r.delClient:
+			for e := r.Clients.Front(); e != nil; e = e.Next() {
+				if e.Value == c {
+					r.RedigoLog(REDIS_DEBUG, "Remove closed client on %s", c.Conn.RemoteAddr())
+					r.Clients.Remove(e)
+					break
+				}
+			}
+
+		case c := <-r.nextToProc:
+			r.ProcessCommand(c)
+
+		case x := <-r.closed:
+			if x {
+				break
+			}
+		}
 	}
 }
 
@@ -409,31 +432,10 @@ func (r *RedigoServer) Listen() {
 		}(listener, addr)
 	}
 
-	// Add clients to server's clients field in another goroutine
-	go func() {
-		for c := range r.newClient {
-			r.Clients.PushBack(c)
-		}
-	}()
-
-	// Remove closed clients
-	go func() {
-		for c := range r.delClient {
-			for e := r.Clients.Front(); e != nil; e = e.Next() {
-				if e.Value == c {
-					r.Clients.Remove(e)
-					break
-				}
-			}
-		}
-	}()
-
 	// If all the listeners have closed, close all channels. And the server will shutdown
 	go func() {
 		wg.Wait()
-		close(r.newClient)
-		close(r.delClient)
-		close(r.nextToProc)
+		r.closed <- true
 	}()
 }
 
@@ -469,9 +471,11 @@ func (r *RedigoServer) RedigoLog(level int, fmt string, objs ...interface{}) {
  * If 1 is returned the client is still alive and valid and
  * other operations can be performed by the caller. Otherwise
  * if 0 is returned the client was destroyed (i.e. after QUIT). */
-func (r *RedigoServer) ProcessCommand(c *RedigoClient) bool {
+func (r *RedigoServer) ProcessCommand(c CommandArg) bool {
 	/* Now lookup the command and check ASAP about trivial error conditions
 	 * such as wrong arity, bad command name and so forth. */
+	// r.RedigoLog(REDIS_DEBUG, "Processing command: %s", c.Argv)
+
 	cmd, ok := r.Command[strings.ToLower(c.Argv[0])]
 	if !ok {
 		c.AddReplyError(fmt.Sprintf("unknown command '%s'", c.Argv[0]))
@@ -485,7 +489,7 @@ func (r *RedigoServer) ProcessCommand(c *RedigoClient) bool {
 	return true
 }
 
-func (r *RedigoServer) Call(c *RedigoClient, cmd *RedigoCommand) {
+func (r *RedigoServer) Call(c CommandArg, cmd *RedigoCommand) {
 	/* Call the command. */
 	dirty := r.Dirty
 	start := time.Now()
@@ -514,11 +518,11 @@ func (r *RedigoServer) PrepareForShutdown() {
 
 /*================================= Server Side Commands ===================================== */
 
-func AUTHCommand(c *RedigoClient) {
+func AUTHCommand(c CommandArg) {
 
 }
 
-func PINGCommand(c *RedigoClient) {
+func PINGCommand(c CommandArg) {
 	if c.Argc > 2 {
 		c.AddReplyError(fmt.Sprintf("wrong number of arguments for '%s' command", c.Argv[0]))
 		return
@@ -531,18 +535,18 @@ func PINGCommand(c *RedigoClient) {
 	}
 }
 
-func ECHOCommand(c *RedigoClient) {
+func ECHOCommand(c CommandArg) {
 
 }
 
-func TIMECommand(c *RedigoClient) {
+func TIMECommand(c CommandArg) {
 
 }
 
-func ADDREPLYCommand(c *RedigoClient) {
+func ADDREPLYCommand(c CommandArg) {
 
 }
 
-func COMMANDCommand(c *RedigoClient) {
+func COMMANDCommand(c CommandArg) {
 
 }

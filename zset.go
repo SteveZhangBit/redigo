@@ -11,7 +11,7 @@ import (
  * Sorted set commands
  *----------------------------------------------------------------------------*/
 
-func ZADDCommand(c *RedigoClient) {
+func ZADDCommand(c CommandArg) {
 	var z rtype.ZSet
 
 	/* TODO: Parse options. At the end 'scoreidx' is set to the argument position
@@ -74,11 +74,11 @@ func ZADDCommand(c *RedigoClient) {
 	}
 }
 
-func ZINCRBYCommand(c *RedigoClient) {
+func ZINCRBYCommand(c CommandArg) {
 
 }
 
-func ZREMCommand(c *RedigoClient) {
+func ZREMCommand(c CommandArg) {
 	var z rtype.ZSet
 
 	var ok bool
@@ -115,27 +115,27 @@ func ZREMCommand(c *RedigoClient) {
 	c.AddReplyInt64(deleted)
 }
 
-func ZREMRANGEBYRANKCommand(c *RedigoClient) {
+func ZREMRANGEBYRANKCommand(c CommandArg) {
 
 }
 
-func ZREMRANGEBYSCORECommand(c *RedigoClient) {
+func ZREMRANGEBYSCORECommand(c CommandArg) {
 
 }
 
-func ZREMRANGEBYLEXCommand(c *RedigoClient) {
+func ZREMRANGEBYLEXCommand(c CommandArg) {
 
 }
 
-func ZUNIONSTORECommand(c *RedigoClient) {
+func ZUNIONSTORECommand(c CommandArg) {
 
 }
 
-func ZINTERSTORECommand(c *RedigoClient) {
+func ZINTERSTORECommand(c CommandArg) {
 
 }
 
-func zrange(c *RedigoClient, reverse bool) {
+func zrange(c CommandArg, reverse bool) {
 	var z rtype.ZSet
 	var start, end int
 	var withscores bool
@@ -221,15 +221,15 @@ func zrange(c *RedigoClient, reverse bool) {
 	}
 }
 
-func ZRANGECommand(c *RedigoClient) {
+func ZRANGECommand(c CommandArg) {
 	zrange(c, false)
 }
 
-func ZREVRANGECommand(c *RedigoClient) {
+func ZREVRANGECommand(c CommandArg) {
 	zrange(c, true)
 }
 
-func zrangescore(c *RedigoClient, reverse bool) {
+func zrangescore(c CommandArg, reverse bool) {
 	// var z rtype.ZSet
 	// var minidx, maxidx int
 
@@ -242,31 +242,31 @@ func zrangescore(c *RedigoClient, reverse bool) {
 	// }
 }
 
-func ZRANGEBYSCORECommand(c *RedigoClient) {
+func ZRANGEBYSCORECommand(c CommandArg) {
 
 }
 
-func ZREVRANGEBYSCORECommand(c *RedigoClient) {
+func ZREVRANGEBYSCORECommand(c CommandArg) {
 
 }
 
-func ZCOUNTCommand(c *RedigoClient) {
+func ZCOUNTCommand(c CommandArg) {
 
 }
 
-func ZLEXCOUNTCommand(c *RedigoClient) {
+func ZLEXCOUNTCommand(c CommandArg) {
 
 }
 
-func ZRANGEBYLEXCommand(c *RedigoClient) {
+func ZRANGEBYLEXCommand(c CommandArg) {
 
 }
 
-func ZREVRANGEBYLEXCommand(c *RedigoClient) {
+func ZREVRANGEBYLEXCommand(c CommandArg) {
 
 }
 
-func ZCARDCommand(c *RedigoClient) {
+func ZCARDCommand(c CommandArg) {
 	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.CZero); o != nil {
 		if z, ok := o.(rtype.ZSet); !ok {
 			c.AddReply(shared.WrongTypeErr)
@@ -276,7 +276,7 @@ func ZCARDCommand(c *RedigoClient) {
 	}
 }
 
-func ZSCORECommand(c *RedigoClient) {
+func ZSCORECommand(c CommandArg) {
 	var z rtype.ZSet
 
 	var ok bool
@@ -294,7 +294,7 @@ func ZSCORECommand(c *RedigoClient) {
 	}
 }
 
-func zrank(c *RedigoClient, reverse bool) {
+func zrank(c CommandArg, reverse bool) {
 	var z rtype.ZSet
 
 	var ok bool
@@ -319,14 +319,14 @@ func zrank(c *RedigoClient, reverse bool) {
 	}
 }
 
-func ZRANKCommand(c *RedigoClient) {
+func ZRANKCommand(c CommandArg) {
 	zrank(c, false)
 }
 
-func ZREVRANKCommand(c *RedigoClient) {
+func ZREVRANKCommand(c CommandArg) {
 	zrank(c, true)
 }
 
-func ZSCANCommand(c *RedigoClient) {
+func ZSCANCommand(c CommandArg) {
 
 }

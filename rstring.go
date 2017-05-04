@@ -9,7 +9,7 @@ import (
 	"github.com/SteveZhangBit/redigo/shared"
 )
 
-func GetInt64FromStringOrReply(c *RedigoClient, o interface{}, msg string) (x int64, ok bool) {
+func GetInt64FromStringOrReply(c CommandArg, o interface{}, msg string) (x int64, ok bool) {
 	switch str := o.(type) {
 	case nil:
 		return 0, true
@@ -34,7 +34,7 @@ func GetInt64FromStringOrReply(c *RedigoClient, o interface{}, msg string) (x in
 	return
 }
 
-func GetFloat64FromStringOrReply(c *RedigoClient, o interface{}, msg string) (x float64, ok bool) {
+func GetFloat64FromStringOrReply(c CommandArg, o interface{}, msg string) (x float64, ok bool) {
 	switch str := o.(type) {
 	case nil:
 		return 0.0, true
@@ -65,7 +65,7 @@ func GetFloat64FromStringOrReply(c *RedigoClient, o interface{}, msg string) (x 
 	return
 }
 
-func CheckStringlength(c *RedigoClient, size int64) bool {
+func CheckStringlength(c CommandArg, size int64) bool {
 	if size > 512*1024*1024 {
 		c.AddReplyError("string exceeds maximum allowed size (512MB)")
 		return false
@@ -77,54 +77,54 @@ func CheckStringlength(c *RedigoClient, size int64) bool {
  * String Commands
  *----------------------------------------------------------------------------*/
 
-// SET key value [NX] [XX] [EX <seconds>] [PX <milliseconds>]
-// Starting with Redis 2.6.12 SET supports a set of options that modify its behavior:
-// EX seconds -- Set the specified expire time, in seconds.
-// PX milliseconds -- Set the specified expire time, in milliseconds.
-// NX -- Only set the key if it does not already exist.
-// XX -- Only set the key if it already exist.
-
-// TODO: Currently, we only implement the very basic function of SET command.
-func SETCommand(c *RedigoClient) {
+/* SET key value [NX] [XX] [EX <seconds>] [PX <milliseconds>]
+ * Starting with Redis 2.6.12 SET supports a set of options that modify its behavior:
+ * EX seconds -- Set the specified expire time, in seconds.
+ * PX milliseconds -- Set the specified expire time, in milliseconds.
+ * NX -- Only set the key if it does not already exist.
+ * XX -- Only set the key if it already exist.
+ *
+ * TODO: Currently, we only implement the very basic function of SET command. */
+func SETCommand(c CommandArg) {
 	c.DB.SetKeyPersist(c.Argv[1], rstring.New(c.Argv[2]))
 	c.Server.Dirty++
 	NotifyKeyspaceEvent(REDIS_NOTIFY_STRING, "set", c.Argv[1], c.DB.ID)
 	c.AddReply(shared.OK)
 }
 
-func SETNXCommand(c *RedigoClient) {
+func SETNXCommand(c CommandArg) {
 
 }
 
-func SETEXCommand(c *RedigoClient) {
+func SETEXCommand(c CommandArg) {
 
 }
 
-func PSETEXCommand(c *RedigoClient) {
+func PSETEXCommand(c CommandArg) {
 
 }
 
-func SETRANGECommand(c *RedigoClient) {
+func SETRANGECommand(c CommandArg) {
 
 }
 
-func GETRANGECommand(c *RedigoClient) {
+func GETRANGECommand(c CommandArg) {
 
 }
 
-func MGETCommand(c *RedigoClient) {
+func MGETCommand(c CommandArg) {
 
 }
 
-func MSETCommand(c *RedigoClient) {
+func MSETCommand(c CommandArg) {
 
 }
 
-func MSETNXCommand(c *RedigoClient) {
+func MSETNXCommand(c CommandArg) {
 
 }
 
-func rstringGet(c *RedigoClient) bool {
+func rstringGet(c CommandArg) bool {
 	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.NullBulk); o == nil {
 		return true
 	} else if str, ok := o.(rtype.String); !ok {
@@ -136,11 +136,11 @@ func rstringGet(c *RedigoClient) bool {
 	}
 }
 
-func GETCommand(c *RedigoClient) {
+func GETCommand(c CommandArg) {
 	rstringGet(c)
 }
 
-func GETSETCommand(c *RedigoClient) {
+func GETSETCommand(c CommandArg) {
 	if rstringGet(c) {
 		c.DB.SetKeyPersist(c.Argv[1], rstring.New(c.Argv[2]))
 		NotifyKeyspaceEvent(REDIS_NOTIFY_STRING, "set", c.Argv[1], c.DB.ID)
@@ -148,7 +148,7 @@ func GETSETCommand(c *RedigoClient) {
 	}
 }
 
-func INCRBYFLOATCommand(c *RedigoClient) {
+func INCRBYFLOATCommand(c CommandArg) {
 	var str rtype.String
 
 	o := c.DB.LookupKeyWrite(c.Argv[1])
@@ -186,7 +186,7 @@ func INCRBYFLOATCommand(c *RedigoClient) {
 	}
 }
 
-func strIncrDecr(c *RedigoClient, incr int64) {
+func strIncrDecr(c CommandArg, incr int64) {
 	var str rtype.String
 
 	o := c.DB.LookupKeyWrite(c.Argv[1])
@@ -222,27 +222,27 @@ func strIncrDecr(c *RedigoClient, incr int64) {
 	}
 }
 
-func INCRCommand(c *RedigoClient) {
+func INCRCommand(c CommandArg) {
 	strIncrDecr(c, 1)
 }
 
-func DECRCommand(c *RedigoClient) {
+func DECRCommand(c CommandArg) {
 	strIncrDecr(c, -1)
 }
 
-func INCRBYCommand(c *RedigoClient) {
+func INCRBYCommand(c CommandArg) {
 	if incr, ok := GetInt64FromStringOrReply(c, c.Argv[2], ""); ok {
 		strIncrDecr(c, incr)
 	}
 }
 
-func DECRBYCommand(c *RedigoClient) {
+func DECRBYCommand(c CommandArg) {
 	if incr, ok := GetInt64FromStringOrReply(c, c.Argv[2], ""); ok {
 		strIncrDecr(c, -incr)
 	}
 }
 
-func APPENDCommand(c *RedigoClient) {
+func APPENDCommand(c CommandArg) {
 	var str rtype.String
 	var totallen int64
 
@@ -260,7 +260,7 @@ func APPENDCommand(c *RedigoClient) {
 			return
 		}
 
-		str.Append(c.Argv[2])
+		c.DB.Update(c.Argv[1], str.Append(c.Argv[2]))
 	}
 	c.DB.SignalModifyKey(c.Argv[1])
 	NotifyKeyspaceEvent(REDIS_NOTIFY_STRING, "append", c.Argv[1], c.DB.ID)
@@ -268,7 +268,7 @@ func APPENDCommand(c *RedigoClient) {
 	c.AddReplyInt64(totallen)
 }
 
-func STRLENCommand(c *RedigoClient) {
+func STRLENCommand(c CommandArg) {
 	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.CZero); o != nil {
 		if str, ok := o.(rtype.String); !ok {
 			c.AddReply(shared.WrongTypeErr)

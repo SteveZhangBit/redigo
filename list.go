@@ -11,7 +11,7 @@ import (
  * List Commands
  *----------------------------------------------------------------------------*/
 
-func listPush(c *RedigoClient, where int) {
+func listPush(c CommandArg, where int) {
 	var l rtype.List
 	var pushed int
 
@@ -48,15 +48,15 @@ func listPush(c *RedigoClient, where int) {
 	c.Server.Dirty += pushed
 }
 
-func LPUSHCommand(c *RedigoClient) {
+func LPUSHCommand(c CommandArg) {
 	listPush(c, rtype.REDIS_LIST_HEAD)
 }
 
-func RPUSHCommand(c *RedigoClient) {
+func RPUSHCommand(c CommandArg) {
 	listPush(c, rtype.REDIS_LIST_TAIL)
 }
 
-func listPushx(c *RedigoClient, ref rtype.String, val rtype.String, where int) {
+func listPushx(c CommandArg, ref rtype.String, val rtype.String, where int) {
 	var l rtype.List
 	var inserted bool
 
@@ -110,15 +110,15 @@ func listPushx(c *RedigoClient, ref rtype.String, val rtype.String, where int) {
 	c.AddReplyInt64(int64(l.Len()))
 }
 
-func LPUSHXCommand(c *RedigoClient) {
+func LPUSHXCommand(c CommandArg) {
 	listPushx(c, nil, rstring.New(c.Argv[2]), rtype.REDIS_LIST_HEAD)
 }
 
-func RPUSHXCommand(c *RedigoClient) {
+func RPUSHXCommand(c CommandArg) {
 	listPushx(c, nil, rstring.New(c.Argv[2]), rtype.REDIS_LIST_TAIL)
 }
 
-func LINSERTCommand(c *RedigoClient) {
+func LINSERTCommand(c CommandArg) {
 	if string(c.Argv[2]) == "after" {
 		listPushx(c, rstring.New(c.Argv[3]), rstring.New(c.Argv[4]), rtype.REDIS_LIST_TAIL)
 	} else if string(c.Argv[2]) == "before" {
@@ -128,7 +128,7 @@ func LINSERTCommand(c *RedigoClient) {
 	}
 }
 
-func LLENCommand(c *RedigoClient) {
+func LLENCommand(c CommandArg) {
 	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.CZero); o != nil {
 		if l, ok := o.(rtype.List); !ok {
 			c.AddReply(shared.WrongTypeErr)
@@ -138,7 +138,7 @@ func LLENCommand(c *RedigoClient) {
 	}
 }
 
-func LINDEXCommand(c *RedigoClient) {
+func LINDEXCommand(c CommandArg) {
 	var l rtype.List
 
 	var ok bool
@@ -159,7 +159,7 @@ func LINDEXCommand(c *RedigoClient) {
 	}
 }
 
-func LSETCommand(c *RedigoClient) {
+func LSETCommand(c CommandArg) {
 	var l rtype.List
 	var index int
 
@@ -189,7 +189,7 @@ func LSETCommand(c *RedigoClient) {
 	}
 }
 
-func listPop(c *RedigoClient, where int) {
+func listPop(c CommandArg, where int) {
 	var l rtype.List
 
 	var ok bool
@@ -223,19 +223,19 @@ func listPop(c *RedigoClient, where int) {
 	}
 }
 
-func LPOPCommand(c *RedigoClient) {
+func LPOPCommand(c CommandArg) {
 	listPop(c, rtype.REDIS_LIST_HEAD)
 }
 
-func RPOPCommand(c *RedigoClient) {
+func RPOPCommand(c CommandArg) {
 	listPop(c, rtype.REDIS_LIST_TAIL)
 }
 
-func LRANGECommand(c *RedigoClient) {
+func LRANGECommand(c CommandArg) {
 
 }
 
-func LTRIMCommand(c *RedigoClient) {
+func LTRIMCommand(c CommandArg) {
 	var l rtype.List
 	var start, end, llen int
 
@@ -308,7 +308,7 @@ func LTRIMCommand(c *RedigoClient) {
  * count = 0: Remove all elements equal to value.
  * For example, LREM list -2 "hello" will remove the last two occurrences of "hello" in the list stored at list.
  * Note that non-existing keys are treated like empty lists, so when key does not exist, the command will always return 0.*/
-func LREMCommand(c *RedigoClient) {
+func LREMCommand(c CommandArg) {
 	var l rtype.List
 	var toremove int
 
@@ -361,18 +361,18 @@ func LREMCommand(c *RedigoClient) {
 	}
 }
 
-func RPOPLPUSHCommand(c *RedigoClient) {
+func RPOPLPUSHCommand(c CommandArg) {
 
 }
 
-func BLPOPCommand(c *RedigoClient) {
+func BLPOPCommand(c CommandArg) {
 
 }
 
-func BRPOPCommand(c *RedigoClient) {
+func BRPOPCommand(c CommandArg) {
 
 }
 
-func BRPOPLPUSHCommand(c *RedigoClient) {
+func BRPOPLPUSHCommand(c CommandArg) {
 
 }

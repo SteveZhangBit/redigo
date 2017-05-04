@@ -51,7 +51,7 @@ func (i IntString) Append(b string) rtype.String {
 
 func New(val string) rtype.String {
 	// Check whether can be convert to integer
-	if x, err := strconv.ParseInt(val, 10, 64); err != nil {
+	if x, err := strconv.ParseInt(val, 10, 64); err == nil {
 		return IntString(x)
 	}
 	return NormString(val)

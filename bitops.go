@@ -1,21 +1,21 @@
 package redigo
 
-func SETBITCommand(c *RedigoClient) {
+func SETBITCommand(c CommandArg) {
 
 }
 
-func GETBITCommand(c *RedigoClient) {
+func GETBITCommand(c CommandArg) {
 
 }
 
-func BITOPCommand(c *RedigoClient) {
+func BITOPCommand(c CommandArg) {
 
 }
 
-func BITCOUNTCommand(c *RedigoClient) {
+func BITCOUNTCommand(c CommandArg) {
 
 }
 
-func BITPOSCommand(c *RedigoClient) {
+func BITPOSCommand(c CommandArg) {
 
 }

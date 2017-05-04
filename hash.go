@@ -13,7 +13,7 @@ import (
  * Hash type commands
  *----------------------------------------------------------------------------*/
 
-func hashLookupWriteOrCreate(c *RedigoClient, key string) (h rtype.HashMap) {
+func hashLookupWriteOrCreate(c CommandArg, key string) (h rtype.HashMap) {
 	if o := c.DB.LookupKeyWrite(key); o == nil {
 		h = hash.New()
 		c.DB.Add(key, h)
@@ -26,7 +26,7 @@ func hashLookupWriteOrCreate(c *RedigoClient, key string) (h rtype.HashMap) {
 	return
 }
 
-func HSETCommand(c *RedigoClient) {
+func HSETCommand(c CommandArg) {
 	var h rtype.HashMap
 	if h = hashLookupWriteOrCreate(c, c.Argv[1]); h == nil {
 		return
@@ -42,7 +42,7 @@ func HSETCommand(c *RedigoClient) {
 	c.Server.Dirty++
 }
 
-func HSETNXCommand(c *RedigoClient) {
+func HSETNXCommand(c CommandArg) {
 	var h rtype.HashMap
 	if h = hashLookupWriteOrCreate(c, c.Argv[1]); h == nil {
 		return
@@ -58,7 +58,7 @@ func HSETNXCommand(c *RedigoClient) {
 	}
 }
 
-func HMSETCommand(c *RedigoClient) {
+func HMSETCommand(c CommandArg) {
 	var h rtype.HashMap
 	if c.Argc%2 == 1 {
 		c.AddReplyError("wrong number of arguments for HMSET")
@@ -76,7 +76,7 @@ func HMSETCommand(c *RedigoClient) {
 	c.Server.Dirty++
 }
 
-func HINCRBYCommand(c *RedigoClient) {
+func HINCRBYCommand(c CommandArg) {
 	var h rtype.HashMap
 	var val, incr int64
 	if x, ok := GetInt64FromStringOrReply(c, c.Argv[3], ""); ok {
@@ -106,7 +106,7 @@ func HINCRBYCommand(c *RedigoClient) {
 	c.Server.Dirty++
 }
 
-func HINCRBYFLOATCommand(c *RedigoClient) {
+func HINCRBYFLOATCommand(c CommandArg) {
 	var h rtype.HashMap
 	var val, incr float64
 	if x, ok := GetFloat64FromStringOrReply(c, c.Argv[3], ""); ok {
@@ -130,7 +130,7 @@ func HINCRBYFLOATCommand(c *RedigoClient) {
 	 * will not create differences in replicas or after an AOF restart. */
 }
 
-func hashAddFieldToReply(c *RedigoClient, h rtype.HashMap, key string) {
+func hashAddFieldToReply(c CommandArg, h rtype.HashMap, key string) {
 	if h == nil {
 		c.AddReply(shared.NullBulk)
 		return
@@ -142,7 +142,7 @@ func hashAddFieldToReply(c *RedigoClient, h rtype.HashMap, key string) {
 	}
 }
 
-func HGETCommand(c *RedigoClient) {
+func HGETCommand(c CommandArg) {
 	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.NullBulk); o != nil {
 		if h, ok := o.(rtype.HashMap); !ok {
 			c.AddReply(shared.WrongTypeErr)
@@ -152,7 +152,7 @@ func HGETCommand(c *RedigoClient) {
 	}
 }
 
-func HMGETCommand(c *RedigoClient) {
+func HMGETCommand(c CommandArg) {
 	/* Don't abort when the key cannot be found. Non-existing keys are empty
 	 * hashes, where HMGET should respond with a series of null bulks. */
 	o := c.DB.LookupKeyRead(c.Argv[1])
@@ -166,7 +166,7 @@ func HMGETCommand(c *RedigoClient) {
 	}
 }
 
-func HDELCommand(c *RedigoClient) {
+func HDELCommand(c CommandArg) {
 	var h rtype.HashMap
 	var deleted int
 	var keyremoved bool
@@ -201,7 +201,7 @@ func HDELCommand(c *RedigoClient) {
 	c.AddReplyInt64(int64(deleted))
 }
 
-func HLENCommand(c *RedigoClient) {
+func HLENCommand(c CommandArg) {
 	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.CZero); o != nil {
 		if h, ok := o.(rtype.HashMap); !ok {
 			c.AddReply(shared.WrongTypeErr)
@@ -211,7 +211,7 @@ func HLENCommand(c *RedigoClient) {
 	}
 }
 
-func hashGetAll(c *RedigoClient, flags int) {
+func hashGetAll(c CommandArg, flags int) {
 	var h rtype.HashMap
 
 	var ok bool
@@ -248,19 +248,19 @@ func hashGetAll(c *RedigoClient, flags int) {
 	}
 }
 
-func HKEYSCommand(c *RedigoClient) {
+func HKEYSCommand(c CommandArg) {
 	hashGetAll(c, rtype.REDIS_HASH_KEY)
 }
 
-func HVALSCommand(c *RedigoClient) {
+func HVALSCommand(c CommandArg) {
 	hashGetAll(c, rtype.REDIS_HASH_VALUE)
 }
 
-func HGETALLCommand(c *RedigoClient) {
+func HGETALLCommand(c CommandArg) {
 	hashGetAll(c, rtype.REDIS_HASH_KEY|rtype.REDIS_HASH_VALUE)
 }
 
-func HEXISTSCommand(c *RedigoClient) {
+func HEXISTSCommand(c CommandArg) {
 	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.CZero); o != nil {
 		if h, ok := o.(rtype.HashMap); !ok {
 			c.AddReply(shared.WrongTypeErr)
@@ -272,6 +272,6 @@ func HEXISTSCommand(c *RedigoClient) {
 	}
 }
 
-func HSCANCommand(c *RedigoClient) {
+func HSCANCommand(c CommandArg) {
 
 }

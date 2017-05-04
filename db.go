@@ -165,65 +165,65 @@ func (r *RedigoDB) removeExpire(key string) {
  * Type agnostic commands operating on the key space
  *----------------------------------------------------------------------------*/
 
-func FLUSHDBCommand(c *RedigoClient) {
+func FLUSHDBCommand(c CommandArg) {
 
 }
 
-func FLUSHALLCommand(c *RedigoClient) {
+func FLUSHALLCommand(c CommandArg) {
 
 }
 
-func DELCommand(c *RedigoClient) {
+func DELCommand(c CommandArg) {
 
 }
 
 /* EXISTS key1 key2 ... key_N.
  * Return value is the number of keys existing. */
-func EXISTSCommand(c *RedigoClient) {
+func EXISTSCommand(c CommandArg) {
 
 }
 
-func SELECTCommand(c *RedigoClient) {
+func SELECTCommand(c CommandArg) {
 
 }
 
-func RANDOMKEYCommand(c *RedigoClient) {
+func RANDOMKEYCommand(c CommandArg) {
 
 }
 
-func KEYSCommand(c *RedigoClient) {
+func KEYSCommand(c CommandArg) {
 
 }
 
-func SCANCommand(c *RedigoClient) {
+func SCANCommand(c CommandArg) {
 
 }
 
-func DBSIZECommand(c *RedigoClient) {
+func DBSIZECommand(c CommandArg) {
 
 }
 
-func LASTSAVECommand(c *RedigoClient) {
+func LASTSAVECommand(c CommandArg) {
 
 }
 
-func TYPECommand(c *RedigoClient) {
+func TYPECommand(c CommandArg) {
 
 }
 
-func SHUTDOWNCommand(c *RedigoClient) {
+func SHUTDOWNCommand(c CommandArg) {
 
 }
 
-func RENAMECommand(c *RedigoClient) {
+func RENAMECommand(c CommandArg) {
 
 }
 
-func RENAMENXCommand(c *RedigoClient) {
+func RENAMENXCommand(c CommandArg) {
 
 }
 
-func MOVECommand(c *RedigoClient) {
+func MOVECommand(c CommandArg) {
 
 }
 
@@ -231,30 +231,30 @@ func MOVECommand(c *RedigoClient) {
  * Expire commands
  *----------------------------------------------------------------------------*/
 
-func EXPIRECommand(c *RedigoClient) {
+func EXPIRECommand(c CommandArg) {
 
 }
 
-func EXPIREATCommand(c *RedigoClient) {
+func EXPIREATCommand(c CommandArg) {
 
 }
 
-func PEXPIRECommand(c *RedigoClient) {
+func PEXPIRECommand(c CommandArg) {
 
 }
 
-func PEXPIREATCommand(c *RedigoClient) {
+func PEXPIREATCommand(c CommandArg) {
 
 }
 
-func TTLCommand(c *RedigoClient) {
+func TTLCommand(c CommandArg) {
 
 }
 
-func PTTLCommand(c *RedigoClient) {
+func PTTLCommand(c CommandArg) {
 
 }
 
-func PERSISTCommand(c *RedigoClient) {
+func PERSISTCommand(c CommandArg) {
 
 }

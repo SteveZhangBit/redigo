@@ -7,7 +7,7 @@ import (
 	"github.com/SteveZhangBit/redigo/shared"
 )
 
-func SADDCommand(c *RedigoClient) {
+func SADDCommand(c CommandArg) {
 	var s rtype.Set
 
 	if o := c.DB.LookupKeyWrite(c.Argv[1]); o == nil {
@@ -35,7 +35,7 @@ func SADDCommand(c *RedigoClient) {
 	c.AddReplyInt64(int64(added))
 }
 
-func SREMCommand(c *RedigoClient) {
+func SREMCommand(c CommandArg) {
 	var s rtype.Set
 
 	var ok bool
@@ -69,11 +69,11 @@ func SREMCommand(c *RedigoClient) {
 	c.AddReplyInt64(int64(deleted))
 }
 
-func SMOVECommand(c *RedigoClient) {
+func SMOVECommand(c CommandArg) {
 
 }
 
-func SISMEMBERCommand(c *RedigoClient) {
+func SISMEMBERCommand(c CommandArg) {
 	var s rtype.Set
 
 	var ok bool
@@ -91,7 +91,7 @@ func SISMEMBERCommand(c *RedigoClient) {
 	}
 }
 
-func SCARDCommand(c *RedigoClient) {
+func SCARDCommand(c CommandArg) {
 	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.CZero); o != nil {
 		if s, ok := o.(rtype.Set); !ok {
 			c.AddReply(shared.WrongTypeErr)
@@ -101,7 +101,7 @@ func SCARDCommand(c *RedigoClient) {
 	}
 }
 
-func SPOPCommand(c *RedigoClient) {
+func SPOPCommand(c CommandArg) {
 	var s rtype.Set
 
 	var ok bool
@@ -127,34 +127,34 @@ func SPOPCommand(c *RedigoClient) {
 	c.Server.Dirty++
 }
 
-func SRANDMEMBERCommand(c *RedigoClient) {
+func SRANDMEMBERCommand(c CommandArg) {
 
 }
 
-func SINTERCommand(c *RedigoClient) {
+func SINTERCommand(c CommandArg) {
 
 }
 
-func SINTERSTORECommand(c *RedigoClient) {
+func SINTERSTORECommand(c CommandArg) {
 
 }
 
-func SUNIONCommand(c *RedigoClient) {
+func SUNIONCommand(c CommandArg) {
 
 }
 
-func SUNIONSTORECommand(c *RedigoClient) {
+func SUNIONSTORECommand(c CommandArg) {
 
 }
 
-func SDIFFCommand(c *RedigoClient) {
+func SDIFFCommand(c CommandArg) {
 
 }
 
-func SDIFFSTORECommand(c *RedigoClient) {
+func SDIFFSTORECommand(c CommandArg) {
 
 }
 
-func SSCANCommand(c *RedigoClient) {
+func SSCANCommand(c CommandArg) {
 
 }
