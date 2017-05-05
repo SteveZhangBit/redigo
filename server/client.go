@@ -1,4 +1,4 @@
-package redigo
+package server
 
 import (
 	"bufio"
@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"unicode"
 
-	"github.com/SteveZhangBit/redigo/shared"
+	"github.com/SteveZhangBit/redigo"
 )
 
 const (
@@ -38,77 +38,23 @@ const (
 	REDIS_PUBSUB                         // Client is in Pub/Sub mode.
 )
 
-type CommandArg struct {
-	*RedigoClient
-
-	Argv []string
-	Argc int
-}
-
 type RedigoClient struct {
-	DB     *RedigoDB
-	Server *RedigoServer
-	Conn   net.Conn
-	Flags  int
-	outBuf chan string
+	*RedigoPubSub
+
+	Flags int
+
+	db     *RedigoDB
+	server *RedigoServer
+
+	conn   net.Conn
+	outbuf chan string
 	closed chan struct{}
 }
 
 func NewClient() *RedigoClient {
 	return &RedigoClient{
-		outBuf: make(chan string, 10),
+		outbuf: make(chan string, 10),
 		closed: make(chan struct{}),
-	}
-}
-
-func (r *RedigoClient) Init() {
-	r.SelectDB(0)
-
-	go r.readNextCommand()
-	go r.sendReplyToClient()
-}
-
-func (r *RedigoClient) Close() {
-	if !r.IsClosed() {
-		r.Server.RedigoLog(REDIS_DEBUG, "Closing connection on: %s", r.Conn.RemoteAddr())
-		r.Conn.Close()
-		close(r.closed)
-		r.Server.delClient <- r
-	}
-}
-
-func (r *RedigoClient) IsClosed() bool {
-	select {
-	case <-r.closed:
-		return true
-	default:
-		return false
-	}
-}
-
-func (r *RedigoClient) SelectDB(id int) bool {
-	if id < 0 || id > len(r.Server.DBs) {
-		return false
-	} else {
-		r.DB = r.Server.DBs[id]
-		return true
-	}
-}
-
-func (r *RedigoClient) sendReplyToClient() {
-	for !r.IsClosed() {
-		select {
-		case x := <-r.outBuf:
-			if _, err := r.Conn.Write([]byte(x)); err != nil {
-				r.Server.RedigoLog(REDIS_VERBOSE, "Error writing to client: %s", err)
-				r.Close()
-			}
-		default:
-			if r.Flags&REDIS_CLOSE_AFTER_REPLY > 0 {
-				r.Close()
-			}
-		}
-
 	}
 }
 
@@ -116,14 +62,14 @@ func (r *RedigoClient) AddReply(x string) {
 	if r.Flags&REDIS_CLOSE_AFTER_REPLY > 0 {
 		return
 	}
-	r.outBuf <- x
+	r.outbuf <- x
 }
 
 func (r *RedigoClient) AddReplyInt64(x int64) {
 	if x == 0 {
-		r.AddReply(shared.CZero)
+		r.AddReply(redigo.CZero)
 	} else if x == 1 {
-		r.AddReply(shared.COne)
+		r.AddReply(redigo.COne)
 	} else {
 		r.AddReply(fmt.Sprintf(":%d\r\n", x))
 	}
@@ -149,19 +95,60 @@ func (r *RedigoClient) AddReplyMultiBulkLen(x int) {
 func (r *RedigoClient) AddReplyBulk(x string) {
 	r.AddReply(fmt.Sprintf("$%d\r\n", len(x)))
 	r.AddReply(x)
-	r.AddReply(shared.CRLF)
+	r.AddReply(redigo.CRLF)
 }
 
 func (r *RedigoClient) AddReplyError(msg string) {
 	r.AddReply("-ERR ")
 	r.AddReply(msg)
-	r.AddReply(shared.CRLF)
+	r.AddReply(redigo.CRLF)
 }
 
 func (r *RedigoClient) AddReplyStatus(msg string) {
 	r.AddReply("+")
 	r.AddReply(msg)
-	r.AddReply(shared.CRLF)
+	r.AddReply(redigo.CRLF)
+}
+
+func (r *RedigoClient) DB() redigo.DB {
+	return r.db
+}
+
+func (r *RedigoClient) Server() redigo.Server {
+	return r.server
+}
+
+func (r *RedigoClient) Init() {
+	r.selectDB(0)
+
+	go r.readNextCommand()
+	go r.sendReplyToClient()
+}
+
+func (r *RedigoClient) selectDB(id int) bool {
+	if id < 0 || id > len(r.server.dbs) {
+		return false
+	} else {
+		r.db = r.server.dbs[id]
+		return true
+	}
+}
+
+func (r *RedigoClient) sendReplyToClient() {
+	for !r.IsClosed() {
+		select {
+		case x := <-r.outbuf:
+			if _, err := r.conn.Write([]byte(x)); err != nil {
+				r.server.RedigoLog(REDIS_VERBOSE, "Error writing to client: %s", err)
+				r.Close()
+			}
+		default:
+			if r.Flags&REDIS_CLOSE_AFTER_REPLY > 0 {
+				r.Close()
+			}
+		}
+
+	}
 }
 
 func (r *RedigoClient) readNextCommand() {
@@ -174,7 +161,7 @@ func (r *RedigoClient) readNextCommand() {
 	 * this flag has been set (i.e. don't process more commands). */
 
 	var line string
-	scanner := bufio.NewScanner(r.Conn)
+	scanner := bufio.NewScanner(r.conn)
 	for scanner.Scan() {
 		line = scanner.Text()
 		if line == "" {
@@ -183,16 +170,16 @@ func (r *RedigoClient) readNextCommand() {
 
 		if line[0] != '*' {
 			if arg, ok := r.readInlineCommand(line); ok {
-				r.Server.nextToProc <- arg
+				r.server.nextToProc <- arg
 			}
 		} else {
 			if arg, ok := r.readMultiBulkCommand(scanner); ok {
-				r.Server.nextToProc <- arg
+				r.server.nextToProc <- arg
 			}
 		}
 	}
 	// if scanner.Err() != nil {
-	// 	r.Server.RedigoLog(REDIS_VERBOSE, "Error reading from client: %s", scanner.Err())
+	// 	r.server.RedigoLog(REDIS_VERBOSE, "Error reading from client: %s", scanner.Err())
 	// }
 	r.Close()
 }
@@ -279,7 +266,7 @@ func (r *RedigoClient) setProtocolError() {
 	r.Flags |= REDIS_CLOSE_AFTER_REPLY
 }
 
-func (r *RedigoClient) readInlineCommand(line string) (arg CommandArg, success bool) {
+func (r *RedigoClient) readInlineCommand(line string) (arg redigo.CommandArg, success bool) {
 	if len(line) > REDIS_INLINE_MAXSIZE {
 		r.AddReplyError("Protocol error: too big inline request")
 		r.setProtocolError()
@@ -294,13 +281,13 @@ func (r *RedigoClient) readInlineCommand(line string) (arg CommandArg, success b
 	} else {
 		arg.Argc = len(argv)
 		arg.Argv = argv
-		arg.RedigoClient = r
+		arg.Client = r
 		success = true
 		return
 	}
 }
 
-func (r *RedigoClient) readMultiBulkCommand(scanner *bufio.Scanner) (arg CommandArg, success bool) {
+func (r *RedigoClient) readMultiBulkCommand(scanner *bufio.Scanner) (arg redigo.CommandArg, success bool) {
 	var line string
 
 	// Read multi builk length
@@ -354,15 +341,33 @@ func (r *RedigoClient) readMultiBulkCommand(scanner *bufio.Scanner) (arg Command
 	if mbulklen == 0 {
 		arg.Argc = len(argv)
 		arg.Argv = argv
-		arg.RedigoClient = r
+		arg.Client = r
 		success = true
 		return
 	}
 	return
 }
 
+func (r *RedigoClient) Close() {
+	if !r.IsClosed() {
+		r.server.RedigoLog(REDIS_DEBUG, "Closing connection on: %s", r.conn.RemoteAddr())
+		r.conn.Close()
+		close(r.closed)
+		r.server.delClient <- r
+	}
+}
+
+func (r *RedigoClient) IsClosed() bool {
+	select {
+	case <-r.closed:
+		return true
+	default:
+		return false
+	}
+}
+
 func (r *RedigoClient) LookupKeyReadOrReply(key string, reply string) interface{} {
-	x := r.DB.LookupKeyRead(key)
+	x := r.db.LookupKeyRead(key)
 	if x == nil {
 		r.AddReply(reply)
 	}
@@ -370,13 +375,9 @@ func (r *RedigoClient) LookupKeyReadOrReply(key string, reply string) interface{
 }
 
 func (r *RedigoClient) LookupKeyWriteOrReply(key string, reply string) interface{} {
-	x := r.DB.LookupKeyWrite(key)
+	x := r.db.LookupKeyWrite(key)
 	if x == nil {
 		r.AddReply(reply)
 	}
 	return x
-}
-
-func CLIENTCommand(c CommandArg) {
-
 }

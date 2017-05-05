@@ -1,17 +1,17 @@
-package redigo
+package command
 
 import (
+	"github.com/SteveZhangBit/redigo"
 	"github.com/SteveZhangBit/redigo/rtype"
 	"github.com/SteveZhangBit/redigo/rtype/rstring"
 	"github.com/SteveZhangBit/redigo/rtype/zset"
-	"github.com/SteveZhangBit/redigo/shared"
 )
 
 /*-----------------------------------------------------------------------------
  * Sorted set commands
  *----------------------------------------------------------------------------*/
 
-func ZADDCommand(c CommandArg) {
+func ZADDCommand(c redigo.CommandArg) {
 	var z rtype.ZSet
 
 	/* TODO: Parse options. At the end 'scoreidx' is set to the argument position
@@ -19,7 +19,7 @@ func ZADDCommand(c CommandArg) {
 	scoreidx := 2
 	elements := c.Argc - scoreidx
 	if elements%2 != 0 {
-		c.AddReply(shared.SyntaxErr)
+		c.AddReply(redigo.SyntaxErr)
 	}
 
 	/* Start parsing all the scores, we need to emit any syntax error
@@ -35,13 +35,13 @@ func ZADDCommand(c CommandArg) {
 	}
 
 	// Lookup the key and create the sorted set if does not exist.
-	if o := c.DB.LookupKeyWrite(c.Argv[1]); o == nil {
+	if o := c.DB().LookupKeyWrite(c.Argv[1]); o == nil {
 		z = zset.New()
-		c.DB.Add(c.Argv[1], z)
+		c.DB().Add(c.Argv[1], z)
 	} else {
 		var ok bool
 		if z, ok = o.(rtype.ZSet); !ok {
-			c.AddReply(shared.WrongTypeErr)
+			c.AddReply(redigo.WrongTypeErr)
 			return
 		}
 	}
@@ -58,34 +58,34 @@ func ZADDCommand(c CommandArg) {
 			 * dictionary still has a reference to it. */
 			if score != curscore {
 				z.Update(score, curobj)
-				c.Server.Dirty++
+				c.Server().AddDirty(1)
 				updated++
 			}
 		} else {
 			z.Add(score, curobj)
-			c.Server.Dirty++
+			c.Server().AddDirty(1)
 			added++
 		}
 	}
 	c.AddReplyInt64(added + updated)
 	if added > 0 || updated > 0 {
-		c.DB.SignalModifyKey(c.Argv[1])
-		NotifyKeyspaceEvent(REDIS_NOTIFY_ZSET, "zadd", c.Argv[1], c.DB.ID)
+		c.DB().SignalModifyKey(c.Argv[1])
+		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_ZSET, "zadd", c.Argv[1], c.DB().GetID())
 	}
 }
 
-func ZINCRBYCommand(c CommandArg) {
+func ZINCRBYCommand(c redigo.CommandArg) {
 
 }
 
-func ZREMCommand(c CommandArg) {
+func ZREMCommand(c redigo.CommandArg) {
 	var z rtype.ZSet
 
 	var ok bool
-	if o := c.LookupKeyWriteOrReply(c.Argv[1], shared.CZero); o == nil {
+	if o := c.LookupKeyWriteOrReply(c.Argv[1], redigo.CZero); o == nil {
 		return
 	} else if z, ok = o.(rtype.ZSet); !ok {
-		c.AddReply(shared.WrongTypeErr)
+		c.AddReply(redigo.WrongTypeErr)
 		return
 	}
 
@@ -97,7 +97,7 @@ func ZREMCommand(c CommandArg) {
 			deleted++
 			z.Delete(score, val)
 			if z.Len() == 0 {
-				c.DB.Delete(c.Argv[1])
+				c.DB().Delete(c.Argv[1])
 				keyremoved = true
 				break
 			}
@@ -105,37 +105,37 @@ func ZREMCommand(c CommandArg) {
 	}
 
 	if deleted > 0 {
-		NotifyKeyspaceEvent(REDIS_NOTIFY_ZSET, "zrem", c.Argv[1], c.DB.ID)
+		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_ZSET, "zrem", c.Argv[1], c.DB().GetID())
 		if keyremoved {
-			NotifyKeyspaceEvent(REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB.ID)
+			c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB().GetID())
 		}
-		c.DB.SignalModifyKey(c.Argv[1])
-		c.Server.Dirty++
+		c.DB().SignalModifyKey(c.Argv[1])
+		c.Server().AddDirty(1)
 	}
 	c.AddReplyInt64(deleted)
 }
 
-func ZREMRANGEBYRANKCommand(c CommandArg) {
+func ZREMRANGEBYRANKCommand(c redigo.CommandArg) {
 
 }
 
-func ZREMRANGEBYSCORECommand(c CommandArg) {
+func ZREMRANGEBYSCORECommand(c redigo.CommandArg) {
 
 }
 
-func ZREMRANGEBYLEXCommand(c CommandArg) {
+func ZREMRANGEBYLEXCommand(c redigo.CommandArg) {
 
 }
 
-func ZUNIONSTORECommand(c CommandArg) {
+func ZUNIONSTORECommand(c redigo.CommandArg) {
 
 }
 
-func ZINTERSTORECommand(c CommandArg) {
+func ZINTERSTORECommand(c redigo.CommandArg) {
 
 }
 
-func zrange(c CommandArg, reverse bool) {
+func zrange(c redigo.CommandArg, reverse bool) {
 	var z rtype.ZSet
 	var start, end int
 	var withscores bool
@@ -153,15 +153,15 @@ func zrange(c CommandArg, reverse bool) {
 	if c.Argc == 5 && c.Argv[4] == "withscores" {
 		withscores = true
 	} else if c.Argc >= 5 {
-		c.AddReply(shared.WrongTypeErr)
+		c.AddReply(redigo.WrongTypeErr)
 		return
 	}
 
 	var ok bool
-	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.EmptyMultiBulk); o == nil {
+	if o := c.LookupKeyReadOrReply(c.Argv[1], redigo.EmptyMultiBulk); o == nil {
 		return
 	} else if z, ok = o.(rtype.ZSet); !ok {
-		c.AddReply(shared.WrongTypeErr)
+		c.AddReply(redigo.WrongTypeErr)
 		return
 	}
 
@@ -180,7 +180,7 @@ func zrange(c CommandArg, reverse bool) {
 	/* Invariant: start >= 0, so this test will be true when end < 0.
 	 * The range is empty when start > end or start >= length. */
 	if start > end || start >= length {
-		c.AddReply(shared.EmptyMultiBulk)
+		c.AddReply(redigo.EmptyMultiBulk)
 		return
 	}
 	if end >= length {
@@ -221,15 +221,15 @@ func zrange(c CommandArg, reverse bool) {
 	}
 }
 
-func ZRANGECommand(c CommandArg) {
+func ZRANGECommand(c redigo.CommandArg) {
 	zrange(c, false)
 }
 
-func ZREVRANGECommand(c CommandArg) {
+func ZREVRANGECommand(c redigo.CommandArg) {
 	zrange(c, true)
 }
 
-func zrangescore(c CommandArg, reverse bool) {
+func zrangescore(c redigo.CommandArg, reverse bool) {
 	// var z rtype.ZSet
 	// var minidx, maxidx int
 
@@ -242,66 +242,66 @@ func zrangescore(c CommandArg, reverse bool) {
 	// }
 }
 
-func ZRANGEBYSCORECommand(c CommandArg) {
+func ZRANGEBYSCORECommand(c redigo.CommandArg) {
 
 }
 
-func ZREVRANGEBYSCORECommand(c CommandArg) {
+func ZREVRANGEBYSCORECommand(c redigo.CommandArg) {
 
 }
 
-func ZCOUNTCommand(c CommandArg) {
+func ZCOUNTCommand(c redigo.CommandArg) {
 
 }
 
-func ZLEXCOUNTCommand(c CommandArg) {
+func ZLEXCOUNTCommand(c redigo.CommandArg) {
 
 }
 
-func ZRANGEBYLEXCommand(c CommandArg) {
+func ZRANGEBYLEXCommand(c redigo.CommandArg) {
 
 }
 
-func ZREVRANGEBYLEXCommand(c CommandArg) {
+func ZREVRANGEBYLEXCommand(c redigo.CommandArg) {
 
 }
 
-func ZCARDCommand(c CommandArg) {
-	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.CZero); o != nil {
+func ZCARDCommand(c redigo.CommandArg) {
+	if o := c.LookupKeyReadOrReply(c.Argv[1], redigo.CZero); o != nil {
 		if z, ok := o.(rtype.ZSet); !ok {
-			c.AddReply(shared.WrongTypeErr)
+			c.AddReply(redigo.WrongTypeErr)
 		} else {
 			c.AddReplyInt64(int64(z.Len()))
 		}
 	}
 }
 
-func ZSCORECommand(c CommandArg) {
+func ZSCORECommand(c redigo.CommandArg) {
 	var z rtype.ZSet
 
 	var ok bool
-	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.NullBulk); o == nil {
+	if o := c.LookupKeyReadOrReply(c.Argv[1], redigo.NullBulk); o == nil {
 		return
 	} else if z, ok = o.(rtype.ZSet); !ok {
-		c.AddReply(shared.WrongTypeErr)
+		c.AddReply(redigo.WrongTypeErr)
 		return
 	}
 
 	if score, ok := z.Get(rstring.New(c.Argv[2])); ok {
 		c.AddReplyFloat64(score)
 	} else {
-		c.AddReply(shared.NullBulk)
+		c.AddReply(redigo.NullBulk)
 	}
 }
 
-func zrank(c CommandArg, reverse bool) {
+func zrank(c redigo.CommandArg, reverse bool) {
 	var z rtype.ZSet
 
 	var ok bool
-	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.NullBulk); o == nil {
+	if o := c.LookupKeyReadOrReply(c.Argv[1], redigo.NullBulk); o == nil {
 		return
 	} else if z, ok = o.(rtype.ZSet); !ok {
-		c.AddReply(shared.WrongTypeErr)
+		c.AddReply(redigo.WrongTypeErr)
 		return
 	}
 
@@ -315,18 +315,18 @@ func zrank(c CommandArg, reverse bool) {
 			c.AddReplyInt64(int64(rank - 1))
 		}
 	} else {
-		c.AddReply(shared.NullBulk)
+		c.AddReply(redigo.NullBulk)
 	}
 }
 
-func ZRANKCommand(c CommandArg) {
+func ZRANKCommand(c redigo.CommandArg) {
 	zrank(c, false)
 }
 
-func ZREVRANKCommand(c CommandArg) {
+func ZREVRANKCommand(c redigo.CommandArg) {
 	zrank(c, true)
 }
 
-func ZSCANCommand(c CommandArg) {
+func ZSCANCommand(c redigo.CommandArg) {
 
 }

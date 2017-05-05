@@ -1,64 +1,64 @@
-package redigo
+package command
 
 import (
 	"math"
 
+	"github.com/SteveZhangBit/redigo"
 	"github.com/SteveZhangBit/redigo/rtype"
 	"github.com/SteveZhangBit/redigo/rtype/hash"
 	"github.com/SteveZhangBit/redigo/rtype/rstring"
-	"github.com/SteveZhangBit/redigo/shared"
 )
 
 /*-----------------------------------------------------------------------------
  * Hash type commands
  *----------------------------------------------------------------------------*/
 
-func hashLookupWriteOrCreate(c CommandArg, key string) (h rtype.HashMap) {
-	if o := c.DB.LookupKeyWrite(key); o == nil {
+func hashLookupWriteOrCreate(c redigo.CommandArg, key string) (h rtype.HashMap) {
+	if o := c.DB().LookupKeyWrite(key); o == nil {
 		h = hash.New()
-		c.DB.Add(key, h)
+		c.DB().Add(key, h)
 	} else {
 		var ok bool
 		if h, ok = o.(rtype.HashMap); !ok {
-			c.AddReply(shared.WrongTypeErr)
+			c.AddReply(redigo.WrongTypeErr)
 		}
 	}
 	return
 }
 
-func HSETCommand(c CommandArg) {
+func HSETCommand(c redigo.CommandArg) {
 	var h rtype.HashMap
 	if h = hashLookupWriteOrCreate(c, c.Argv[1]); h == nil {
 		return
 	}
 	update := h.Set(c.Argv[2], rstring.New(c.Argv[3]))
 	if update {
-		c.AddReply(shared.CZero)
+		c.AddReply(redigo.CZero)
 	} else {
-		c.AddReply(shared.COne)
+		c.AddReply(redigo.COne)
 	}
-	c.DB.SignalModifyKey(c.Argv[1])
-	NotifyKeyspaceEvent(REDIS_NOTIFY_HASH, "hset", c.Argv[1], c.DB.ID)
-	c.Server.Dirty++
+	c.DB().SignalModifyKey(c.Argv[1])
+	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_HASH, "hset", c.Argv[1], c.DB().GetID())
+	c.Server().AddDirty(1)
 }
 
-func HSETNXCommand(c CommandArg) {
+func HSETNXCommand(c redigo.CommandArg) {
 	var h rtype.HashMap
 	if h = hashLookupWriteOrCreate(c, c.Argv[1]); h == nil {
 		return
 	}
 	if _, ok := h.Get(c.Argv[2]); ok {
-		c.AddReply(shared.CZero)
+		c.AddReply(redigo.CZero)
 	} else {
 		h.Set(c.Argv[2], rstring.New(c.Argv[3]))
-		c.AddReply(shared.COne)
-		c.DB.SignalModifyKey(c.Argv[1])
-		NotifyKeyspaceEvent(REDIS_NOTIFY_HASH, "hset", c.Argv[1], c.DB.ID)
-		c.Server.Dirty++
+		c.AddReply(redigo.COne)
+		c.DB().SignalModifyKey(c.Argv[1])
+		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_HASH, "hset", c.Argv[1], c.DB().GetID())
+		c.Server().AddDirty(1)
 	}
 }
 
-func HMSETCommand(c CommandArg) {
+func HMSETCommand(c redigo.CommandArg) {
 	var h rtype.HashMap
 	if c.Argc%2 == 1 {
 		c.AddReplyError("wrong number of arguments for HMSET")
@@ -70,13 +70,13 @@ func HMSETCommand(c CommandArg) {
 	for i := 2; i < c.Argc; i += 2 {
 		h.Set(c.Argv[i], rstring.New(c.Argv[i+1]))
 	}
-	c.AddReply(shared.OK)
-	c.DB.SignalModifyKey(c.Argv[1])
-	NotifyKeyspaceEvent(REDIS_NOTIFY_HASH, "hset", c.Argv[1], c.DB.ID)
-	c.Server.Dirty++
+	c.AddReply(redigo.OK)
+	c.DB().SignalModifyKey(c.Argv[1])
+	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_HASH, "hset", c.Argv[1], c.DB().GetID())
+	c.Server().AddDirty(1)
 }
 
-func HINCRBYCommand(c CommandArg) {
+func HINCRBYCommand(c redigo.CommandArg) {
 	var h rtype.HashMap
 	var val, incr int64
 	if x, ok := GetInt64FromStringOrReply(c, c.Argv[3], ""); ok {
@@ -101,12 +101,12 @@ func HINCRBYCommand(c CommandArg) {
 	val += incr
 	h.Set(c.Argv[2], rstring.NewFromInt64(val))
 	c.AddReplyInt64(val)
-	c.DB.SignalModifyKey(c.Argv[1])
-	NotifyKeyspaceEvent(REDIS_NOTIFY_HASH, "hincrby", c.Argv[1], c.DB.ID)
-	c.Server.Dirty++
+	c.DB().SignalModifyKey(c.Argv[1])
+	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_HASH, "hincrby", c.Argv[1], c.DB().GetID())
+	c.Server().AddDirty(1)
 }
 
-func HINCRBYFLOATCommand(c CommandArg) {
+func HINCRBYFLOATCommand(c redigo.CommandArg) {
 	var h rtype.HashMap
 	var val, incr float64
 	if x, ok := GetFloat64FromStringOrReply(c, c.Argv[3], ""); ok {
@@ -121,61 +121,61 @@ func HINCRBYFLOATCommand(c CommandArg) {
 	str := rstring.NewFromFloat64(val)
 	h.Set(c.Argv[2], str)
 	c.AddReplyBulk(str.String())
-	c.DB.SignalModifyKey(c.Argv[1])
-	NotifyKeyspaceEvent(REDIS_NOTIFY_HASH, "hincrbyfloat", c.Argv[1], c.DB.ID)
-	c.Server.Dirty++
+	c.DB().SignalModifyKey(c.Argv[1])
+	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_HASH, "hincrbyfloat", c.Argv[1], c.DB().GetID())
+	c.Server().AddDirty(1)
 
 	/* TODO: Always replicate HINCRBYFLOAT as an HSET command with the final value
 	 * in order to make sure that differences in float pricision or formatting
 	 * will not create differences in replicas or after an AOF restart. */
 }
 
-func hashAddFieldToReply(c CommandArg, h rtype.HashMap, key string) {
+func hashAddFieldToReply(c redigo.CommandArg, h rtype.HashMap, key string) {
 	if h == nil {
-		c.AddReply(shared.NullBulk)
+		c.AddReply(redigo.NullBulk)
 		return
 	}
 	if val, ok := h.Get(key); !ok {
-		c.AddReply(shared.NullBulk)
+		c.AddReply(redigo.NullBulk)
 	} else {
 		c.AddReplyBulk(val.String())
 	}
 }
 
-func HGETCommand(c CommandArg) {
-	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.NullBulk); o != nil {
+func HGETCommand(c redigo.CommandArg) {
+	if o := c.LookupKeyReadOrReply(c.Argv[1], redigo.NullBulk); o != nil {
 		if h, ok := o.(rtype.HashMap); !ok {
-			c.AddReply(shared.WrongTypeErr)
+			c.AddReply(redigo.WrongTypeErr)
 		} else {
 			hashAddFieldToReply(c, h, c.Argv[2])
 		}
 	}
 }
 
-func HMGETCommand(c CommandArg) {
+func HMGETCommand(c redigo.CommandArg) {
 	/* Don't abort when the key cannot be found. Non-existing keys are empty
 	 * hashes, where HMGET should respond with a series of null bulks. */
-	o := c.DB.LookupKeyRead(c.Argv[1])
+	o := c.DB().LookupKeyRead(c.Argv[1])
 	if h, ok := o.(rtype.HashMap); o == nil || ok {
 		c.AddReplyMultiBulkLen(c.Argc - 2)
 		for i := 2; i < c.Argc; i++ {
 			hashAddFieldToReply(c, h, c.Argv[i])
 		}
 	} else {
-		c.AddReply(shared.WrongTypeErr)
+		c.AddReply(redigo.WrongTypeErr)
 	}
 }
 
-func HDELCommand(c CommandArg) {
+func HDELCommand(c redigo.CommandArg) {
 	var h rtype.HashMap
 	var deleted int
 	var keyremoved bool
 
 	var ok bool
-	if o := c.LookupKeyWriteOrReply(c.Argv[1], shared.CZero); o == nil {
+	if o := c.LookupKeyWriteOrReply(c.Argv[1], redigo.CZero); o == nil {
 		return
 	} else if h, ok = o.(rtype.HashMap); !ok {
-		c.AddReply(shared.WrongTypeErr)
+		c.AddReply(redigo.WrongTypeErr)
 		return
 	}
 
@@ -184,41 +184,41 @@ func HDELCommand(c CommandArg) {
 			h.Delete(c.Argv[i])
 			deleted++
 			if h.Len() == 0 {
-				c.DB.Delete(c.Argv[1])
+				c.DB().Delete(c.Argv[1])
 				keyremoved = true
 				break
 			}
 		}
 	}
 	if deleted > 0 {
-		c.DB.SignalModifyKey(c.Argv[1])
-		NotifyKeyspaceEvent(REDIS_NOTIFY_HASH, "hdel", c.Argv[1], c.DB.ID)
+		c.DB().SignalModifyKey(c.Argv[1])
+		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_HASH, "hdel", c.Argv[1], c.DB().GetID())
 		if keyremoved {
-			NotifyKeyspaceEvent(REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB.ID)
+			c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB().GetID())
 		}
-		c.Server.Dirty += deleted
+		c.Server().AddDirty(deleted)
 	}
 	c.AddReplyInt64(int64(deleted))
 }
 
-func HLENCommand(c CommandArg) {
-	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.CZero); o != nil {
+func HLENCommand(c redigo.CommandArg) {
+	if o := c.LookupKeyReadOrReply(c.Argv[1], redigo.CZero); o != nil {
 		if h, ok := o.(rtype.HashMap); !ok {
-			c.AddReply(shared.WrongTypeErr)
+			c.AddReply(redigo.WrongTypeErr)
 		} else {
 			c.AddReplyInt64(int64(h.Len()))
 		}
 	}
 }
 
-func hashGetAll(c CommandArg, flags int) {
+func hashGetAll(c redigo.CommandArg, flags int) {
 	var h rtype.HashMap
 
 	var ok bool
-	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.CZero); o == nil {
+	if o := c.LookupKeyReadOrReply(c.Argv[1], redigo.CZero); o == nil {
 		return
 	} else if h, ok = o.(rtype.HashMap); !ok {
-		c.AddReply(shared.WrongTypeErr)
+		c.AddReply(redigo.WrongTypeErr)
 		return
 	}
 
@@ -248,30 +248,30 @@ func hashGetAll(c CommandArg, flags int) {
 	}
 }
 
-func HKEYSCommand(c CommandArg) {
+func HKEYSCommand(c redigo.CommandArg) {
 	hashGetAll(c, rtype.REDIS_HASH_KEY)
 }
 
-func HVALSCommand(c CommandArg) {
+func HVALSCommand(c redigo.CommandArg) {
 	hashGetAll(c, rtype.REDIS_HASH_VALUE)
 }
 
-func HGETALLCommand(c CommandArg) {
+func HGETALLCommand(c redigo.CommandArg) {
 	hashGetAll(c, rtype.REDIS_HASH_KEY|rtype.REDIS_HASH_VALUE)
 }
 
-func HEXISTSCommand(c CommandArg) {
-	if o := c.LookupKeyReadOrReply(c.Argv[1], shared.CZero); o != nil {
+func HEXISTSCommand(c redigo.CommandArg) {
+	if o := c.LookupKeyReadOrReply(c.Argv[1], redigo.CZero); o != nil {
 		if h, ok := o.(rtype.HashMap); !ok {
-			c.AddReply(shared.WrongTypeErr)
+			c.AddReply(redigo.WrongTypeErr)
 		} else if _, ok = h.Get(c.Argv[2]); ok {
-			c.AddReply(shared.COne)
+			c.AddReply(redigo.COne)
 		} else {
-			c.AddReply(shared.CZero)
+			c.AddReply(redigo.CZero)
 		}
 	}
 }
 
-func HSCANCommand(c CommandArg) {
+func HSCANCommand(c redigo.CommandArg) {
 
 }

@@ -1,4 +1,4 @@
-package redigo
+package server
 
 import (
 	"fmt"
@@ -13,17 +13,22 @@ func init() {
 }
 
 type RedigoDB struct {
-	ID      int
-	Dict    map[string]interface{}
-	Expires map[string]time.Time
-	Server  *RedigoServer
+	id     int
+	server *RedigoServer
+
+	dict    map[string]interface{}
+	expires map[string]time.Time
 }
 
 func NewDB() *RedigoDB {
 	return &RedigoDB{
-		Dict:    make(map[string]interface{}),
-		Expires: make(map[string]time.Time),
+		dict:    make(map[string]interface{}),
+		expires: make(map[string]time.Time),
 	}
+}
+
+func (r *RedigoDB) GetID() int {
+	return r.id
 }
 
 func (r *RedigoDB) LookupKey(key string) interface{} {
@@ -31,18 +36,18 @@ func (r *RedigoDB) LookupKey(key string) interface{} {
 	 * Don't do it if we have a saving child, as this will trigger
 	 * a copy on write madness. */
 
-	o, _ := r.Dict[key]
+	o, _ := r.dict[key]
 	return o
 }
 
 func (r *RedigoDB) LookupKeyRead(key string) interface{} {
 	r.expireIfNeed(key)
 
-	if o, ok := r.Dict[key]; !ok {
-		r.Server.KeyspaceMisses++
+	if o, ok := r.dict[key]; !ok {
+		r.server.keyspaceMisses++
 		return nil
 	} else {
-		r.Server.KeyspaceHits++
+		r.server.keyspaceHits++
 		return o
 	}
 }
@@ -57,8 +62,8 @@ func (r *RedigoDB) LookupKeyWrite(key string) interface{} {
  *
  * The program is aborted if the key already exists. */
 func (r *RedigoDB) Add(key string, val interface{}) {
-	if _, ok := r.Dict[key]; !ok {
-		r.Dict[key] = val
+	if _, ok := r.dict[key]; !ok {
+		r.dict[key] = val
 		if _, ok = val.(*list.LinkedList); ok {
 			r.SignalListAsReady(key)
 		}
@@ -68,19 +73,19 @@ func (r *RedigoDB) Add(key string, val interface{}) {
 }
 
 func (r *RedigoDB) Update(key string, val interface{}) {
-	if _, ok := r.Dict[key]; ok {
-		r.Dict[key] = val
+	if _, ok := r.dict[key]; ok {
+		r.dict[key] = val
 	} else {
 		panic(fmt.Sprintf("Key %s doesn't exist", key))
 	}
 }
 
 func (r *RedigoDB) Delete(key string) (ok bool) {
-	if _, ok = r.Expires[key]; ok {
-		delete(r.Expires, key)
+	if _, ok = r.expires[key]; ok {
+		delete(r.expires, key)
 	}
-	if _, ok = r.Dict[key]; ok {
-		delete(r.Dict, key)
+	if _, ok = r.dict[key]; ok {
+		delete(r.dict, key)
 	}
 	return
 }
@@ -95,22 +100,22 @@ func (r *RedigoDB) SetKeyPersist(key string, val interface{}) {
 	if r.LookupKeyWrite(key) == nil {
 		r.Add(key, val)
 	} else {
-		r.Dict[key] = val
+		r.dict[key] = val
 	}
 	r.removeExpire(key)
 	r.SignalModifyKey(key)
 }
 
 func (r *RedigoDB) Exists(key string) (ok bool) {
-	_, ok = r.Dict[key]
+	_, ok = r.dict[key]
 	return
 }
 
 func (r *RedigoDB) RandomKey() (key string) {
-	keys := make([]string, len(r.Dict))
+	keys := make([]string, len(r.dict))
 
 	i := 0
-	for k := range r.Dict {
+	for k := range r.dict {
 		keys[i] = k
 	}
 
@@ -160,97 +165,3 @@ func (r *RedigoDB) removeExpire(key string) {
 // func (r *RedigoDB) getExpire(key string) time.Time {
 
 // }
-
-/*-----------------------------------------------------------------------------
- * Type agnostic commands operating on the key space
- *----------------------------------------------------------------------------*/
-
-func FLUSHDBCommand(c CommandArg) {
-
-}
-
-func FLUSHALLCommand(c CommandArg) {
-
-}
-
-func DELCommand(c CommandArg) {
-
-}
-
-/* EXISTS key1 key2 ... key_N.
- * Return value is the number of keys existing. */
-func EXISTSCommand(c CommandArg) {
-
-}
-
-func SELECTCommand(c CommandArg) {
-
-}
-
-func RANDOMKEYCommand(c CommandArg) {
-
-}
-
-func KEYSCommand(c CommandArg) {
-
-}
-
-func SCANCommand(c CommandArg) {
-
-}
-
-func DBSIZECommand(c CommandArg) {
-
-}
-
-func LASTSAVECommand(c CommandArg) {
-
-}
-
-func TYPECommand(c CommandArg) {
-
-}
-
-func RENAMECommand(c CommandArg) {
-
-}
-
-func RENAMENXCommand(c CommandArg) {
-
-}
-
-func MOVECommand(c CommandArg) {
-
-}
-
-/*-----------------------------------------------------------------------------
- * Expire commands
- *----------------------------------------------------------------------------*/
-
-func EXPIRECommand(c CommandArg) {
-
-}
-
-func EXPIREATCommand(c CommandArg) {
-
-}
-
-func PEXPIRECommand(c CommandArg) {
-
-}
-
-func PEXPIREATCommand(c CommandArg) {
-
-}
-
-func TTLCommand(c CommandArg) {
-
-}
-
-func PTTLCommand(c CommandArg) {
-
-}
-
-func PERSISTCommand(c CommandArg) {
-
-}
