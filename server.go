@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
 	"time"
@@ -270,7 +271,7 @@ type RedigoServer struct {
 	listeners []net.Listener
 	newClient chan *RedigoClient
 	delClient chan *RedigoClient
-	closed    chan bool
+	closed    chan struct{}
 	// Logging
 	Verbosity int
 	// Command
@@ -298,17 +299,19 @@ func NewServer() *RedigoServer {
 		BindAddr:   []string{""},
 		newClient:  make(chan *RedigoClient, 1),
 		delClient:  make(chan *RedigoClient, 1),
-		closed:     make(chan bool),
+		closed:     make(chan struct{}),
 		Verbosity:  REDIS_DEBUG,
 		nextToProc: make(chan CommandArg, 1),
 		DBNum:      4,
 	}
-	s.PopulateCommandTable()
+	s.Clients = list.New()
+	s.Clients.Init()
+	s.populateCommandTable()
 	return s
 }
 
 // Populates the Redis Command Table starting from the hard coded list
-func (r *RedigoServer) PopulateCommandTable() {
+func (r *RedigoServer) populateCommandTable() {
 	r.Command = make(map[string]*RedigoCommand)
 	for _, cmd := range RedigoCommandTable {
 		r.Command[cmd.Name] = cmd
@@ -349,11 +352,8 @@ func (r *RedigoServer) PopulateCommandTable() {
 }
 
 func (r *RedigoServer) Init() {
-	r.Clients = list.New()
-	r.Clients.Init()
-
 	// Open the TCP listening socket for the user commands.
-	r.Listen()
+	r.listen()
 	// Abort if there are no listening sockets at all.
 	if len(r.listeners) == 0 {
 		r.RedigoLog(REDIS_WARNING, "Configured to not listen anywhere, exiting.")
@@ -370,6 +370,9 @@ func (r *RedigoServer) Init() {
 
 	// A few stats we don't want to reset: server startup time, and peak mem.
 	r.StatStartTime = time.Now()
+
+	// Add system interrupt listener
+	r.signalHandler()
 
 	// Waiting to process commands, add clients or remove closed clients
 	for {
@@ -388,17 +391,31 @@ func (r *RedigoServer) Init() {
 			}
 
 		case c := <-r.nextToProc:
-			r.ProcessCommand(c)
+			r.processCommand(c)
 
-		case x := <-r.closed:
-			if x {
-				break
-			}
+		case <-r.closed:
+			break
 		}
 	}
 }
 
-func (r *RedigoServer) Listen() {
+func (r *RedigoServer) signalHandler() {
+	// Add system interrupt listener
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt)
+	go func() {
+		for {
+			<-interrupt
+			r.RedigoLog(REDIS_WARNING, "Received SIGINT scheduling shutdown...")
+			if r.prepareForShutdown() {
+				os.Exit(0)
+			}
+			r.RedigoLog(REDIS_WARNING, "SIGTERM received but errors trying to shut down the server, check the logs for more information")
+		}
+	}()
+}
+
+func (r *RedigoServer) listen() {
 	var wg sync.WaitGroup
 
 	for _, ip := range r.BindAddr {
@@ -435,7 +452,7 @@ func (r *RedigoServer) Listen() {
 	// If all the listeners have closed, close all channels. And the server will shutdown
 	go func() {
 		wg.Wait()
-		r.closed <- true
+		close(r.closed)
 	}()
 }
 
@@ -471,7 +488,7 @@ func (r *RedigoServer) RedigoLog(level int, fmt string, objs ...interface{}) {
  * If 1 is returned the client is still alive and valid and
  * other operations can be performed by the caller. Otherwise
  * if 0 is returned the client was destroyed (i.e. after QUIT). */
-func (r *RedigoServer) ProcessCommand(c CommandArg) bool {
+func (r *RedigoServer) processCommand(c CommandArg) bool {
 	/* Now lookup the command and check ASAP about trivial error conditions
 	 * such as wrong arity, bad command name and so forth. */
 	// r.RedigoLog(REDIS_DEBUG, "Processing command: %s", c.Argv)
@@ -485,11 +502,11 @@ func (r *RedigoServer) ProcessCommand(c CommandArg) bool {
 		return true
 	}
 
-	r.Call(c, cmd)
+	r.call(c, cmd)
 	return true
 }
 
-func (r *RedigoServer) Call(c CommandArg, cmd *RedigoCommand) {
+func (r *RedigoServer) call(c CommandArg, cmd *RedigoCommand) {
 	/* Call the command. */
 	dirty := r.Dirty
 	start := time.Now()
@@ -508,12 +525,17 @@ func (r *RedigoServer) Call(c CommandArg, cmd *RedigoCommand) {
 
 /*=========================================== Shutdown ======================================== */
 
-func (r *RedigoServer) CloseListeningSockets() {
-
+func (r *RedigoServer) closeListeningSockets() {
+	for _, l := range r.listeners {
+		l.Close()
+	}
 }
 
-func (r *RedigoServer) PrepareForShutdown() {
-
+func (r *RedigoServer) prepareForShutdown() bool {
+	r.RedigoLog(REDIS_WARNING, "User requested shutdown...")
+	r.closeListeningSockets()
+	r.RedigoLog(REDIS_WARNING, "%s is now ready to exit, bye bye...", "Redis")
+	return true
 }
 
 /*================================= Server Side Commands ===================================== */
@@ -549,4 +571,22 @@ func ADDREPLYCommand(c CommandArg) {
 
 func COMMANDCommand(c CommandArg) {
 
+}
+
+func SHUTDOWNCommand(c CommandArg) {
+	if c.Argc > 2 {
+		c.AddReply(shared.SyntaxErr)
+		return
+	}
+	/* When SHUTDOWN is called while the server is loading a dataset in
+	 * memory we need to make sure no attempt is performed to save
+	 * the dataset on shutdown (otherwise it could overwrite the current DB
+	 * with half-read data).
+	 *
+	 * Also when in Sentinel mode clear the SAVE flag and force NOSAVE. */
+
+	if c.Server.prepareForShutdown() {
+		os.Exit(0)
+	}
+	c.AddReplyError("Errors trying to SHUTDOWN. Check logs.")
 }

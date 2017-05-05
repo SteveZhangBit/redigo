@@ -211,10 +211,6 @@ func TYPECommand(c CommandArg) {
 
 }
 
-func SHUTDOWNCommand(c CommandArg) {
-
-}
-
 func RENAMECommand(c CommandArg) {
 
 }

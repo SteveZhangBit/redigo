@@ -191,9 +191,9 @@ func (r *RedigoClient) readNextCommand() {
 			}
 		}
 	}
-	if scanner.Err() != nil {
-		r.Server.RedigoLog(REDIS_VERBOSE, "Error reading from client: %s", scanner.Err())
-	}
+	// if scanner.Err() != nil {
+	// 	r.Server.RedigoLog(REDIS_VERBOSE, "Error reading from client: %s", scanner.Err())
+	// }
 	r.Close()
 }
 
