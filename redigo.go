@@ -58,7 +58,7 @@ type Server interface {
 	Init()
 	PrepareForShutdown() bool
 	AddDirty(i int)
-	RedigoLog(level int, fmt string, objs ...interface{})
+	// RedigoLog(level int, fm string, objs ...interface{})
 }
 
 type DB interface {

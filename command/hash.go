@@ -117,6 +117,12 @@ func HINCRBYFLOATCommand(c redigo.CommandArg) {
 	if h = hashLookupWriteOrCreate(c, c.Argv[1]); h == nil {
 		return
 	}
+	if cur, ok := h.Get(c.Argv[2]); ok {
+		if val, ok = GetFloat64FromStringOrReply(c, cur, "hash value is not a valid float"); !ok {
+			return
+		}
+	}
+
 	val += incr
 	str := rstring.NewFromFloat64(val)
 	h.Set(c.Argv[2], str)

@@ -3,6 +3,7 @@ package command
 import (
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/SteveZhangBit/redigo"
 	"github.com/SteveZhangBit/redigo/rtype"
@@ -76,6 +77,11 @@ func CheckStringlength(c redigo.CommandArg, size int64) bool {
 /*-----------------------------------------------------------------------------
  * String Commands
  *----------------------------------------------------------------------------*/
+const (
+	REDIS_SET_NO_FLAGS = 0
+	REDIS_SET_NX       = 1 << 0 // set if key not exists
+	REDIS_SET_XX       = 1 << 1 // set if key exists
+)
 
 /* SET key value [NX] [XX] [EX <seconds>] [PX <milliseconds>]
  * Starting with Redis 2.6.12 SET supports a set of options that modify its behavior:
@@ -85,15 +91,53 @@ func CheckStringlength(c redigo.CommandArg, size int64) bool {
  * XX -- Only set the key if it already exist.
  *
  * TODO: Currently, we only implement the very basic function of SET command. */
-func SETCommand(c redigo.CommandArg) {
+func rstringSet(c redigo.CommandArg, flags int, okReply, abortReply string) {
+	if (flags&REDIS_SET_NX > 0 && c.DB().LookupKeyWrite(c.Argv[1]) != nil) ||
+		(flags&REDIS_SET_XX > 0 && c.DB().LookupKeyWrite(c.Argv[1]) == nil) {
+		if abortReply != "" {
+			c.AddReply(abortReply)
+		} else {
+			c.AddReply(redigo.NullBulk)
+		}
+		return
+	}
+
 	c.DB().SetKeyPersist(c.Argv[1], rstring.New(c.Argv[2]))
 	c.Server().AddDirty(1)
 	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_STRING, "set", c.Argv[1], c.DB().GetID())
-	c.AddReply(redigo.OK)
+	if okReply != "" {
+		c.AddReply(okReply)
+	} else {
+		c.AddReply(redigo.OK)
+	}
+}
+
+func SETCommand(c redigo.CommandArg) {
+	flags := REDIS_SET_NO_FLAGS
+
+	for j := 3; j < c.Argc; j++ {
+		a := strings.ToLower(c.Argv[j])
+
+		// var next string
+		// if j < c.Argc-1 {
+		// 	next = c.Argv[j+1]
+		// }
+
+		if a == "nx" {
+			flags |= REDIS_SET_NX
+		} else if a == "xx" {
+			flags |= REDIS_SET_XX
+		} else {
+			c.AddReply(redigo.SyntaxErr)
+			return
+		}
+	}
+
+	rstringSet(c, flags, "", "")
 }
 
 func SETNXCommand(c redigo.CommandArg) {
-
+	rstringSet(c, REDIS_SET_NX, redigo.COne, redigo.CZero)
 }
 
 func SETEXCommand(c redigo.CommandArg) {
@@ -101,26 +145,6 @@ func SETEXCommand(c redigo.CommandArg) {
 }
 
 func PSETEXCommand(c redigo.CommandArg) {
-
-}
-
-func SETRANGECommand(c redigo.CommandArg) {
-
-}
-
-func GETRANGECommand(c redigo.CommandArg) {
-
-}
-
-func MGETCommand(c redigo.CommandArg) {
-
-}
-
-func MSETCommand(c redigo.CommandArg) {
-
-}
-
-func MSETNXCommand(c redigo.CommandArg) {
 
 }
 
@@ -146,6 +170,26 @@ func GETSETCommand(c redigo.CommandArg) {
 		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_STRING, "set", c.Argv[1], c.DB().GetID())
 		c.Server().AddDirty(1)
 	}
+}
+
+func SETRANGECommand(c redigo.CommandArg) {
+
+}
+
+func GETRANGECommand(c redigo.CommandArg) {
+
+}
+
+func MGETCommand(c redigo.CommandArg) {
+
+}
+
+func MSETCommand(c redigo.CommandArg) {
+
+}
+
+func MSETNXCommand(c redigo.CommandArg) {
+
 }
 
 func INCRBYFLOATCommand(c redigo.CommandArg) {
@@ -186,7 +230,7 @@ func INCRBYFLOATCommand(c redigo.CommandArg) {
 	}
 }
 
-func strIncrDecr(c redigo.CommandArg, incr int64) {
+func rstringIncrDecr(c redigo.CommandArg, incr int64) {
 	var str rtype.String
 
 	o := c.DB().LookupKeyWrite(c.Argv[1])
@@ -223,22 +267,22 @@ func strIncrDecr(c redigo.CommandArg, incr int64) {
 }
 
 func INCRCommand(c redigo.CommandArg) {
-	strIncrDecr(c, 1)
+	rstringIncrDecr(c, 1)
 }
 
 func DECRCommand(c redigo.CommandArg) {
-	strIncrDecr(c, -1)
+	rstringIncrDecr(c, -1)
 }
 
 func INCRBYCommand(c redigo.CommandArg) {
 	if incr, ok := GetInt64FromStringOrReply(c, c.Argv[2], ""); ok {
-		strIncrDecr(c, incr)
+		rstringIncrDecr(c, incr)
 	}
 }
 
 func DECRBYCommand(c redigo.CommandArg) {
 	if incr, ok := GetInt64FromStringOrReply(c, c.Argv[2], ""); ok {
-		strIncrDecr(c, -incr)
+		rstringIncrDecr(c, -incr)
 	}
 }
 

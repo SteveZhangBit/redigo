@@ -139,7 +139,7 @@ func (r *RedigoClient) sendReplyToClient() {
 		select {
 		case x := <-r.outbuf:
 			if _, err := r.conn.Write([]byte(x)); err != nil {
-				r.server.RedigoLog(REDIS_VERBOSE, "Error writing to client: %s", err)
+				r.server.redigoLog(REDIS_VERBOSE, "Error writing to client: %s", err)
 				r.Close()
 			}
 		default:
@@ -179,7 +179,7 @@ func (r *RedigoClient) readNextCommand() {
 		}
 	}
 	// if scanner.Err() != nil {
-	// 	r.server.RedigoLog(REDIS_VERBOSE, "Error reading from client: %s", scanner.Err())
+	// 	r.server.redigoLog(REDIS_VERBOSE, "Error reading from client: %s", scanner.Err())
 	// }
 	r.Close()
 }
@@ -350,7 +350,7 @@ func (r *RedigoClient) readMultiBulkCommand(scanner *bufio.Scanner) (arg redigo.
 
 func (r *RedigoClient) Close() {
 	if !r.IsClosed() {
-		r.server.RedigoLog(REDIS_DEBUG, "Closing connection on: %s", r.conn.RemoteAddr())
+		r.server.redigoLog(REDIS_DEBUG, "Closing connection on: %s", r.conn.RemoteAddr())
 		r.conn.Close()
 		close(r.closed)
 		r.server.delClient <- r

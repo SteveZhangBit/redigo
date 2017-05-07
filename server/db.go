@@ -13,11 +13,14 @@ func init() {
 }
 
 type RedigoDB struct {
-	id     int
-	server *RedigoServer
+	id int
+	// server *RedigoServer
 
 	dict    map[string]interface{}
 	expires map[string]time.Time
+
+	KeyspaceMisses int
+	KeyspaceHits   int
 }
 
 func NewDB() *RedigoDB {
@@ -44,10 +47,10 @@ func (r *RedigoDB) LookupKeyRead(key string) interface{} {
 	r.expireIfNeed(key)
 
 	if o, ok := r.dict[key]; !ok {
-		r.server.keyspaceMisses++
+		r.KeyspaceMisses++
 		return nil
 	} else {
-		r.server.keyspaceHits++
+		r.KeyspaceHits++
 		return o
 	}
 }
@@ -117,6 +120,7 @@ func (r *RedigoDB) RandomKey() (key string) {
 	i := 0
 	for k := range r.dict {
 		keys[i] = k
+		i++
 	}
 
 	for {
@@ -124,9 +128,8 @@ func (r *RedigoDB) RandomKey() (key string) {
 		if r.expireIfNeed(key) {
 			continue
 		}
+		return
 	}
-
-	return
 }
 
 /*-----------------------------------------------------------------------------
