@@ -38,6 +38,7 @@ type List interface {
 	Rotate()
 	PopFront() ListElement
 	PopBack() ListElement
+	Iterator(head int) Iterator
 }
 
 type ListElement interface {
@@ -79,4 +80,10 @@ type ZSetItem interface {
 	Prev() ZSetItem
 	Value() String
 	Score() float64
+}
+
+type Iterator interface {
+	HasNext() bool
+	Next() interface{}
+	Remove()
 }

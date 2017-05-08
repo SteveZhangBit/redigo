@@ -330,9 +330,12 @@ func LREMCommand(c redigo.CommandArg) {
 	removed := 0
 	if toremove < 0 {
 		toremove = -toremove
-		for e := l.Back(); e != nil; e = e.Prev() {
+
+		iter := l.Iterator(rtype.REDIS_LIST_TAIL)
+		for iter.HasNext() {
+			e := iter.Next().(rtype.ListElement)
 			if rstring.EqualStringObjects(e.Value(), val) {
-				l.Remove(e)
+				iter.Remove()
 				c.Server().AddDirty(1)
 				removed++
 				if toremove != 0 && removed == toremove {
@@ -341,9 +344,11 @@ func LREMCommand(c redigo.CommandArg) {
 			}
 		}
 	} else {
-		for e := l.Front(); e != nil; e = e.Next() {
+		iter := l.Iterator(rtype.REDIS_LIST_HEAD)
+		for iter.HasNext() {
+			e := iter.Next().(rtype.ListElement)
 			if rstring.EqualStringObjects(e.Value(), val) {
-				l.Remove(e)
+				iter.Remove()
 				c.Server().AddDirty(1)
 				removed++
 				if toremove != 0 && removed == toremove {

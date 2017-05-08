@@ -92,7 +92,6 @@ func (l *LinkedList) PushBack(v rtype.String) rtype.ListElement {
 }
 
 func (l *LinkedList) PushFront(v rtype.String) rtype.ListElement {
-	return &LLElement{e: l.l.PushFront(v)}
 	if e := l.l.PushFront(v); e != nil {
 		return &LLElement{e: e}
 	}
@@ -143,8 +142,72 @@ func (l *LinkedList) PopBack() rtype.ListElement {
 	return e
 }
 
+func (l *LinkedList) Iterator(head int) rtype.Iterator {
+	return NewIterator(l, head)
+}
+
 func New() rtype.List {
 	l := list.New()
 	l.Init()
 	return &LinkedList{l: l}
+}
+
+type ListIterator struct {
+	l    rtype.List
+	node rtype.ListElement
+	head int
+}
+
+func (l *ListIterator) HasNext() bool {
+	if l.node == nil {
+		if l.head == rtype.REDIS_LIST_HEAD {
+			return l.l.Front() != nil
+		} else {
+			return l.l.Back() != nil
+		}
+	}
+
+	if l.head == rtype.REDIS_LIST_HEAD {
+		return l.node.Next() != nil
+	} else {
+		return l.node.Prev() != nil
+	}
+}
+
+func (l *ListIterator) Next() interface{} {
+	if l.node == nil {
+		if l.head == rtype.REDIS_LIST_HEAD {
+			l.node = l.l.Front()
+		} else {
+			l.node = l.l.Back()
+		}
+	} else {
+		if l.head == rtype.REDIS_LIST_HEAD {
+			l.node = l.node.Next()
+		} else {
+			l.node = l.node.Prev()
+		}
+	}
+
+	return l.node
+}
+
+func (l *ListIterator) Remove() {
+	if l.node == nil {
+		return
+	}
+
+	var next rtype.ListElement
+
+	if l.head == rtype.REDIS_LIST_HEAD {
+		next = l.node.Next()
+	} else {
+		next = l.node.Prev()
+	}
+	l.l.Remove(l.node)
+	l.node = next
+}
+
+func NewIterator(l rtype.List, head int) rtype.Iterator {
+	return &ListIterator{l: l, head: head}
 }
