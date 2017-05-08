@@ -114,10 +114,20 @@ func (l *LinkedList) SearchKey(v rtype.String) rtype.ListElement {
 
 // Return the element at that index.
 func (l *LinkedList) Index(n int) rtype.ListElement {
-	e := l.Front()
-	for i := 0; e != nil && i < n; i++ {
-		e = e.Next()
+	var e rtype.ListElement
+
+	if n >= 0 {
+		e = l.Front()
+		for i := 0; e != nil && i < n; i++ {
+			e = e.Next()
+		}
+	} else {
+		e = l.Back()
+		for i := -1; e != nil && i > n; i-- {
+			e = e.Prev()
+		}
 	}
+
 	return e
 }
 

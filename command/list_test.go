@@ -222,3 +222,29 @@ func TestLREM(t *testing.T) {
 		t.Error("lrem: lrem 0 b when foo is ce")
 	}
 }
+
+func TestLRANGE(t *testing.T) {
+	fake := NewFakeClient()
+
+	RPUSHCommand(NewCommand(fake, "rpush", "foo", "a", "b", "c", "d", "e", "f"))
+	fake.ReplyText = ""
+	LRANGECommand(NewCommand(fake, "lrange", "foo", "1", "3"))
+	if fake.CompareText("*3\r\n$1\r\nb\r\n$1\r\nc\r\n$1\r\nd\r\n", t) {
+		t.Error("lrange: range between 1 3 and foo is abcdef")
+	}
+
+	LRANGECommand(NewCommand(fake, "lrange", "foo", "2", "-3"))
+	if fake.CompareText("*2\r\n$1\r\nc\r\n$1\r\nd\r\n", t) {
+		t.Error("lrange: range between 2 -3 and foo is abcdef")
+	}
+
+	LRANGECommand(NewCommand(fake, "lrange", "foo", "-2", "-3"))
+	if fake.CompareText(redigo.EmptyMultiBulk, t) {
+		t.Error("lrange: range between -2 -3 and foo is abcdef")
+	}
+
+	LRANGECommand(NewCommand(fake, "lrange", "foo", "4", "9"))
+	if fake.CompareText("*2\r\n$1\r\ne\r\n$1\r\nf\r\n", t) {
+		t.Error("lrange: range between 4 9 and foo is abcdef")
+	}
+}

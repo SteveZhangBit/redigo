@@ -232,7 +232,63 @@ func RPOPCommand(c redigo.CommandArg) {
 }
 
 func LRANGECommand(c redigo.CommandArg) {
+	var l rtype.List
+	var start, end, llen, rangelen int
 
+	if x, ok := GetInt64FromStringOrReply(c, c.Argv[2], ""); !ok {
+		return
+	} else if y, ok := GetInt64FromStringOrReply(c, c.Argv[3], ""); !ok {
+		return
+	} else {
+		start = int(x)
+		end = int(y)
+	}
+
+	var ok bool
+	if o := c.LookupKeyReadOrReply(c.Argv[1], redigo.EmptyMultiBulk); o == nil {
+		return
+	} else if l, ok = o.(rtype.List); !ok {
+		c.AddReplyError(redigo.WrongTypeErr)
+		return
+	}
+	llen = l.Len()
+
+	// convert negative indexes
+	if start < 0 {
+		start = llen + start
+	}
+	if end < 0 {
+		end = llen + end
+	}
+	if start < 0 {
+		start = 0
+	}
+
+	/* Invariant: start >= 0, so this test will be true when end < 0.
+	 * The range is empty when start > end or start >= length. */
+	if start > end || start >= llen {
+		c.AddReply(redigo.EmptyMultiBulk)
+		return
+	}
+	if end >= llen {
+		end = llen - 1
+	}
+
+	rangelen = end - start + 1
+
+	// Return the result in form of a multi-bulk reply
+	c.AddReplyMultiBulkLen(rangelen)
+	/* If we are nearest to the end of the list, reach the element
+	 * starting from tail and going backward, as it is faster. */
+	if start > llen/2 {
+		start -= llen
+	}
+	e := l.Index(start)
+	for rangelen > 0 {
+		c.AddReplyBulk(e.Value().String())
+		e = e.Next()
+		rangelen--
+	}
 }
 
 func LTRIMCommand(c redigo.CommandArg) {
