@@ -366,7 +366,7 @@ func (r *RedigoServer) Init() {
 	r.listen()
 	// Abort if there are no listening sockets at all.
 	if len(r.listeners) == 0 {
-		r.redigoLog(REDIS_WARNING, "Configured to not listen anywhere, exiting.")
+		r.RedigoLog(REDIS_WARNING, "Configured to not listen anywhere, exiting.")
 		os.Exit(1)
 	}
 
@@ -390,7 +390,7 @@ func (r *RedigoServer) Init() {
 	for {
 		select {
 		case c := <-r.newClient:
-			r.redigoLog(REDIS_DEBUG, "New connection on %s", c.conn.RemoteAddr())
+			r.RedigoLog(REDIS_DEBUG, "New connection on %s", c.conn.RemoteAddr())
 			r.clients.PushBack(c)
 
 		case c := <-r.delClient:
@@ -414,11 +414,11 @@ func (r *RedigoServer) signalHandler() {
 	go func() {
 		for {
 			<-interrupt
-			r.redigoLog(REDIS_WARNING, "Received SIGINT scheduling shutdown...")
+			r.RedigoLog(REDIS_WARNING, "Received SIGINT scheduling shutdown...")
 			if r.PrepareForShutdown() {
 				os.Exit(0)
 			}
-			r.redigoLog(REDIS_WARNING, "SIGTERM received but errors trying to shut down the server, check the logs for more information")
+			r.RedigoLog(REDIS_WARNING, "SIGTERM received but errors trying to shut down the server, check the logs for more information")
 		}
 	}()
 }
@@ -429,7 +429,7 @@ func (r *RedigoServer) listen() {
 		listener, err := net.Listen("tcp", addr)
 
 		if err != nil {
-			r.redigoLog(REDIS_WARNING, "Creating Server TCP listening socket %s: %s", addr, err)
+			r.RedigoLog(REDIS_WARNING, "Creating Server TCP listening socket %s: %s", addr, err)
 			continue
 		}
 
@@ -439,7 +439,7 @@ func (r *RedigoServer) listen() {
 
 			for {
 				if conn, err := l.Accept(); err != nil {
-					r.redigoLog(REDIS_WARNING, "Accepting Server TCP listening socket %s: %s", addr, err)
+					r.RedigoLog(REDIS_WARNING, "Accepting Server TCP listening socket %s: %s", addr, err)
 					break
 				} else {
 					// Create client
@@ -457,7 +457,7 @@ func (r *RedigoServer) listen() {
 
 /* ================================= logging methods ======================================= */
 
-func (r *RedigoServer) redigoLog(level int, fm string, objs ...interface{}) {
+func (r *RedigoServer) RedigoLog(level int, fm string, objs ...interface{}) {
 	if level >= r.Verbosity {
 		if level&REDIS_LOG_RAW > 0 {
 			flags := log.Flags()
@@ -482,7 +482,7 @@ func (r *RedigoServer) redigoLog(level int, fm string, objs ...interface{}) {
 func (r *RedigoServer) processCommand(c redigo.CommandArg) bool {
 	/* Now lookup the command and check ASAP about trivial error conditions
 	 * such as wrong arity, bad command name and so forth. */
-	// r.redigoLog(REDIS_DEBUG, "Processing command: %s", c.Argv)
+	// r.RedigoLog(REDIS_DEBUG, "Processing command: %s", c.Argv)
 
 	cmd, ok := r.Commands[strings.ToLower(c.Argv[0])]
 	if !ok {
@@ -523,8 +523,8 @@ func (r *RedigoServer) closeListeningSockets() {
 }
 
 func (r *RedigoServer) PrepareForShutdown() bool {
-	r.redigoLog(REDIS_WARNING, "User requested shutdown...")
+	r.RedigoLog(REDIS_WARNING, "User requested shutdown...")
 	r.closeListeningSockets()
-	r.redigoLog(REDIS_WARNING, "%s is now ready to exit, bye bye...", "Redis")
+	r.RedigoLog(REDIS_WARNING, "%s is now ready to exit, bye bye...", "Redis")
 	return true
 }

@@ -1,5 +1,7 @@
 package redigo
 
+import "bufio"
+
 const (
 	Version = "0.0.1"
 )
@@ -31,7 +33,9 @@ const (
 )
 
 type Client interface {
-	ClientReplyer
+	ProtocolWriter
+	ProtocolReader
+
 	PubSub
 
 	DB() DB
@@ -44,7 +48,7 @@ type Client interface {
 	LookupKeyWriteOrReply(key string, reply string) interface{}
 }
 
-type ClientReplyer interface {
+type ProtocolWriter interface {
 	AddReply(x string)
 	AddReplyInt64(x int64)
 	AddReplyFloat64(x float64)
@@ -52,6 +56,11 @@ type ClientReplyer interface {
 	AddReplyBulk(x string)
 	AddReplyError(msg string)
 	AddReplyStatus(msg string)
+}
+
+type ProtocolReader interface {
+	ReadInlineCommand(line string, c Client) (CommandArg, error)
+	ReadMultiBulkCommand(scanner *bufio.Scanner, c Client) (CommandArg, error)
 }
 
 type Server interface {

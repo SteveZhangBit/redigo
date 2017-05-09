@@ -20,7 +20,9 @@ func ZADDCommand(c redigo.CommandArg) {
 	elements := c.Argc - scoreidx
 	if elements%2 != 0 {
 		c.AddReply(redigo.SyntaxErr)
+		return
 	}
+	elements /= 2
 
 	/* Start parsing all the scores, we need to emit any syntax error
 	 * before executing additions to the sorted set, as the command should
@@ -230,16 +232,7 @@ func ZREVRANGECommand(c redigo.CommandArg) {
 }
 
 func zrangescore(c redigo.CommandArg, reverse bool) {
-	// var z rtype.ZSet
-	// var minidx, maxidx int
 
-	// if reverse {
-	// 	// Range is given as [max,min]
-	// 	minidx, maxidx = 3, 2
-	// } else {
-	// 	// Range is given as [min,max]
-	// 	minidx, maxidx = 2, 3
-	// }
 }
 
 func ZRANGEBYSCORECommand(c redigo.CommandArg) {

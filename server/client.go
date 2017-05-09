@@ -2,17 +2,9 @@ package server
 
 import (
 	"bufio"
-	"fmt"
-	"math"
 	"net"
-	"strconv"
-	"unicode"
 
 	"github.com/SteveZhangBit/redigo"
-)
-
-const (
-	REDIS_INLINE_MAXSIZE = 1024 * 60
 )
 
 // Client flags
@@ -39,6 +31,9 @@ const (
 )
 
 type RedigoClient struct {
+	*redigo.RESPWriter
+	*redigo.RESPReader
+
 	*RedigoPubSub
 
 	Flags int
@@ -52,62 +47,18 @@ type RedigoClient struct {
 }
 
 func NewClient() *RedigoClient {
-	return &RedigoClient{
+	c := &RedigoClient{
 		outbuf: make(chan string, 10),
 		closed: make(chan struct{}),
 	}
-}
-
-func (r *RedigoClient) AddReply(x string) {
-	if r.Flags&REDIS_CLOSE_AFTER_REPLY > 0 {
-		return
-	}
-	r.outbuf <- x
-}
-
-func (r *RedigoClient) AddReplyInt64(x int64) {
-	if x == 0 {
-		r.AddReply(redigo.CZero)
-	} else if x == 1 {
-		r.AddReply(redigo.COne)
-	} else {
-		r.AddReply(fmt.Sprintf(":%d\r\n", x))
-	}
-}
-
-func (r *RedigoClient) AddReplyFloat64(x float64) {
-	if math.IsInf(x, 0) {
-		if x > 0 {
-			r.AddReplyBulk("inf")
-		} else {
-			r.AddReplyBulk("-inf")
+	c.RESPWriter = redigo.NewRESPWriterFunc(func(x string) {
+		if c.Flags&REDIS_CLOSE_AFTER_REPLY > 0 {
+			return
 		}
-	} else {
-		s := fmt.Sprintf("%.17g", x)
-		r.AddReply(fmt.Sprintf("$%d\r\n%s\r\n", len(s), s))
-	}
-}
+		c.outbuf <- x
+	})
 
-func (r *RedigoClient) AddReplyMultiBulkLen(x int) {
-	r.AddReply(fmt.Sprintf("*%d\r\n", x))
-}
-
-func (r *RedigoClient) AddReplyBulk(x string) {
-	r.AddReply(fmt.Sprintf("$%d\r\n", len(x)))
-	r.AddReply(x)
-	r.AddReply(redigo.CRLF)
-}
-
-func (r *RedigoClient) AddReplyError(msg string) {
-	r.AddReply("-ERR ")
-	r.AddReply(msg)
-	r.AddReply(redigo.CRLF)
-}
-
-func (r *RedigoClient) AddReplyStatus(msg string) {
-	r.AddReply("+")
-	r.AddReply(msg)
-	r.AddReply(redigo.CRLF)
+	return c
 }
 
 func (r *RedigoClient) DB() redigo.DB {
@@ -139,7 +90,7 @@ func (r *RedigoClient) sendReplyToClient() {
 		select {
 		case x := <-r.outbuf:
 			if _, err := r.conn.Write([]byte(x)); err != nil {
-				r.server.redigoLog(REDIS_VERBOSE, "Error writing to client: %s", err)
+				r.server.RedigoLog(REDIS_VERBOSE, "Error writing to client: %s", err)
 				r.Close()
 			}
 		default:
@@ -169,188 +120,34 @@ func (r *RedigoClient) readNextCommand() {
 		}
 
 		if line[0] != '*' {
-			if arg, ok := r.readInlineCommand(line); ok {
+			if arg, err := r.ReadInlineCommand(line, r); err != nil {
+				r.AddReplyError(err.Error())
+				r.setProtocolError()
+			} else {
 				r.server.nextToProc <- arg
 			}
 		} else {
-			if arg, ok := r.readMultiBulkCommand(scanner); ok {
+			if arg, err := r.ReadMultiBulkCommand(scanner, r); err != nil {
+				r.AddReplyError(err.Error())
+				r.setProtocolError()
+			} else {
 				r.server.nextToProc <- arg
 			}
 		}
 	}
 	// if scanner.Err() != nil {
-	// 	r.server.redigoLog(REDIS_VERBOSE, "Error reading from client: %s", scanner.Err())
+	// 	r.server.RedigoLog(REDIS_VERBOSE, "Error reading from client: %s", scanner.Err())
 	// }
 	r.Close()
-}
-
-func splitInlineArgs(line []rune) ([]string, bool) {
-	length := len(line)
-
-	var argv []string
-	var inq, insq bool
-	for i := 0; i < length; i++ {
-		// Skip space
-		for unicode.IsSpace(line[i]) {
-			i++
-		}
-
-		var token []rune
-		for ; i < length; i++ {
-			if inq {
-				if line[i] == '\\' && i+1 < length {
-					var c rune
-					i++
-					switch line[i] {
-					case 'n':
-						c = '\n'
-					case 'r':
-						c = '\r'
-					case 't':
-						c = '\t'
-					case 'b':
-						c = '\b'
-					case 'a':
-						c = '\a'
-					default:
-						c = line[i]
-					}
-					token = append(token, c)
-				} else if line[i] == '"' {
-					if i+1 < length && !unicode.IsSpace(line[i+1]) {
-						return nil, false
-					}
-					inq = false
-					break
-				} else {
-					token = append(token, line[i])
-				}
-			} else if insq {
-				if line[i] == '\\' && i+1 < length && line[i+1] == '\'' {
-					i++
-					token = append(token, '\'')
-				} else if line[i] == '\'' {
-					if i+1 < length && !unicode.IsSpace(line[i+1]) {
-						return nil, false
-					}
-					insq = false
-					break
-				} else {
-					token = append(token, line[i])
-				}
-			} else {
-				var c rune = line[i]
-				if c == '"' {
-					inq = true
-				} else if c == '\'' {
-					insq = true
-				} else if unicode.IsSpace(c) {
-					break
-				} else {
-					token = append(token, c)
-				}
-			}
-		}
-		argv = append(argv, string(token))
-	}
-
-	// Unterminated quotes
-	if inq || insq {
-		return nil, false
-	}
-
-	return argv, true
 }
 
 func (r *RedigoClient) setProtocolError() {
 	r.Flags |= REDIS_CLOSE_AFTER_REPLY
 }
 
-func (r *RedigoClient) readInlineCommand(line string) (arg redigo.CommandArg, success bool) {
-	if len(line) > REDIS_INLINE_MAXSIZE {
-		r.AddReplyError("Protocol error: too big inline request")
-		r.setProtocolError()
-		return
-	}
-
-	// Split the input buffer
-	if argv, ok := splitInlineArgs([]rune(line)); !ok {
-		r.AddReplyError("Protocol error: unbalanced quotes in request")
-		r.setProtocolError()
-		return
-	} else {
-		arg.Argc = len(argv)
-		arg.Argv = argv
-		arg.Client = r
-		success = true
-		return
-	}
-}
-
-func (r *RedigoClient) readMultiBulkCommand(scanner *bufio.Scanner) (arg redigo.CommandArg, success bool) {
-	var line string
-
-	// Read multi builk length
-	line = scanner.Text()
-	if len(line) > REDIS_INLINE_MAXSIZE {
-		r.AddReplyError("Protocol error: too big mbulk count string")
-		r.setProtocolError()
-		return
-	}
-
-	// Find out the multi bulk length.
-	var mbulklen int
-	if x, err := strconv.ParseInt(line[1:], 10, 64); err != nil || x > 1024*1024 {
-		r.AddReplyError("Protocol error: invalid multibulk length")
-		r.setProtocolError()
-		return
-	} else {
-		mbulklen = int(x)
-	}
-
-	var argv []string
-	for ; mbulklen > 0 && scanner.Scan(); mbulklen-- {
-		line = scanner.Text()
-		if len(line) > REDIS_INLINE_MAXSIZE {
-			r.AddReplyError("Protocol error: too big bulk count string")
-			r.setProtocolError()
-			return
-		}
-
-		if line[0] != '$' {
-			r.AddReplyError(fmt.Sprintf("Protocol error: expected '$', got '%c'", line[0]))
-			r.setProtocolError()
-			return
-		}
-
-		if bulklen, err := strconv.ParseInt(line[1:], 10, 64); err != nil || bulklen > 512*1024*1024 {
-			r.AddReplyError("Protocol error: invalid bulk length")
-			r.setProtocolError()
-			return
-		} else {
-			if !scanner.Scan() {
-				return
-			}
-			line = scanner.Text()
-			if len(line) != int(bulklen) {
-				return
-			}
-			argv = append(argv, line)
-		}
-	}
-	if mbulklen == 0 {
-		arg.Argc = len(argv)
-		arg.Argv = argv
-		arg.Client = r
-		success = true
-		return
-	}
-	return
-}
-
 func (r *RedigoClient) Close() {
 	if !r.IsClosed() {
-		r.server.redigoLog(REDIS_DEBUG, "Closing connection on: %s", r.conn.RemoteAddr())
+		r.server.RedigoLog(REDIS_DEBUG, "Closing connection on: %s", r.conn.RemoteAddr())
 		r.conn.Close()
 		close(r.closed)
 		r.server.delClient <- r

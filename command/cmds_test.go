@@ -1,56 +1,61 @@
 package command
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/SteveZhangBit/redigo"
 )
 
 type TestClient struct {
+	*redigo.RESPWriter
+	*redigo.RESPReader
+
 	*TestPubSub
 
 	db     *TestDB
 	server *TestServer
-
-	ReplyText string
 }
 
-func (c *TestClient) CompareText(x string, t *testing.T) bool {
-	ok := c.ReplyText != x
+func (c *TestClient) CompareText(t *testing.T, x string) bool {
+	ok := c.Text != x
 	if ok {
-		t.Logf("need %q, get %q", x, c.ReplyText)
+		t.Logf("need %q, get %q", x, c.Text)
 	}
-	c.ReplyText = ""
+	c.Text = ""
 	return ok
 }
 
-func (c *TestClient) AddReply(x string) {
-	c.ReplyText += x
+func (c *TestClient) CompareInt64(t *testing.T, x int64) bool {
+	writer := redigo.NewRESPWriter()
+	writer.AddReplyInt64(x)
+	return c.CompareText(t, writer.Text)
 }
 
-func (c *TestClient) AddReplyInt64(x int64) {
-	c.ReplyText += fmt.Sprintf("%d", x)
+func (c *TestClient) CompareFloat64(t *testing.T, x float64) bool {
+	writer := redigo.NewRESPWriter()
+	writer.AddReplyFloat64(x)
+	return c.CompareText(t, writer.Text)
 }
 
-func (c *TestClient) AddReplyFloat64(x float64) {
-	c.ReplyText += fmt.Sprintf("%.17f", x)
+func (c *TestClient) CompareErr(t *testing.T, msg string) bool {
+	writer := redigo.NewRESPWriter()
+	writer.AddReplyError(msg)
+	return c.CompareText(t, writer.Text)
 }
 
-func (c *TestClient) AddReplyMultiBulkLen(x int) {
-	c.ReplyText += fmt.Sprintf("*%d\r\n", x)
+func (c *TestClient) CompareBulk(t *testing.T, x string) bool {
+	writer := redigo.NewRESPWriter()
+	writer.AddReplyBulk(x)
+	return c.CompareText(t, writer.Text)
 }
 
-func (c *TestClient) AddReplyBulk(x string) {
-	c.ReplyText += fmt.Sprintf("$%d\r\n%s\r\n", len(x), x)
-}
-
-func (c *TestClient) AddReplyError(msg string) {
-	c.ReplyText += fmt.Sprintf("-ERR %s", msg)
-}
-
-func (c *TestClient) AddReplyStatus(msg string) {
-	c.ReplyText += fmt.Sprintf("+%s", msg)
+func (c *TestClient) CompareMultiBulk(t *testing.T, xs ...string) bool {
+	writer := redigo.NewRESPWriter()
+	writer.AddReplyMultiBulkLen(len(xs))
+	for _, x := range xs {
+		writer.AddReplyBulk(x)
+	}
+	return c.CompareText(t, writer.Text)
 }
 
 func (c *TestClient) DB() redigo.DB {
@@ -178,24 +183,24 @@ func NewCommand(fake redigo.Client, argv ...string) redigo.CommandArg {
 }
 
 func NewFakeClient() *TestClient {
-	return &TestClient{server: &TestServer{}, db: &TestDB{Dict: make(map[string]interface{})}}
+	return &TestClient{RESPWriter: redigo.NewRESPWriter(), server: &TestServer{}, db: &TestDB{Dict: make(map[string]interface{})}}
 }
 
 func TestPING(t *testing.T) {
 	fake := NewFakeClient()
 
 	PINGCommand(NewCommand(fake, "ping", "hello", "world"))
-	if fake.CompareText("-ERR wrong number of arguments for 'ping' command", t) {
+	if fake.CompareErr(t, "wrong number of arguments for 'ping' command") {
 		t.Error("ping: c.Argc > 2")
 	}
 
 	PINGCommand(NewCommand(fake, "ping", "hello"))
-	if fake.CompareText("$5\r\nhello\r\n", t) {
+	if fake.CompareBulk(t, "hello") {
 		t.Error("ping: c.Argc == 2")
 	}
 
 	PINGCommand(NewCommand(fake, "ping"))
-	if fake.CompareText(redigo.Pong, t) {
+	if fake.CompareText(t, redigo.Pong) {
 		t.Error("ping: failed")
 	}
 }
@@ -204,11 +209,11 @@ func TestSHUTDOWN(t *testing.T) {
 	fake := NewFakeClient()
 
 	SHUTDOWNCommand(NewCommand(fake, "shutdown", "right", "now"))
-	if fake.CompareText(redigo.SyntaxErr, t) {
+	if fake.CompareText(t, redigo.SyntaxErr) {
 		t.Error("shutdown: c.Argc > 2")
 	}
 	SHUTDOWNCommand(NewCommand(fake, "shutdown"))
-	if fake.CompareText("-ERR Errors trying to SHUTDOWN. Check logs.", t) {
+	if fake.CompareErr(t, "Errors trying to SHUTDOWN. Check logs.") {
 		t.Error("shutdown: PrepareForShutdown false")
 	}
 }

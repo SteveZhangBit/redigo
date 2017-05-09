@@ -62,7 +62,7 @@ func NewFromInt64(val int64) rtype.String {
 }
 
 func NewFromFloat64(val float64) rtype.String {
-	return NormString(fmt.Sprintf("%.17f", val))
+	return NormString(fmt.Sprintf("%.17g", val))
 }
 
 func CompareStringObjects(a, b rtype.String) int {
