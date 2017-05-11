@@ -12,6 +12,7 @@ import (
 
 	"github.com/SteveZhangBit/redigo"
 	"github.com/SteveZhangBit/redigo/command"
+	"github.com/SteveZhangBit/redigo/rtype"
 )
 
 const (
@@ -288,13 +289,31 @@ type RedigoServer struct {
 	DBNum int
 	dbs   []*RedigoDB
 	// DB persistence
-	dirty int // changes to DB from the last save
-	// Fields used only for stas
-	keyspaceHits   int
+	dirty          int // changes to DB from the last save
 	keyspaceMisses int
+	keyspaceHits   int
 	// Status
 	StatStartTime   time.Time
 	StatNumCommands int
+	// Blocked clients
+	blockedClients int
+	readyKeys      []ReadyKey
+}
+
+/* The following structure represents a node in the server.ready_keys list,
+ * where we accumulate all the keys that had clients blocked with a blocking
+ * operation such as B[LR]POP, but received new data in the context of the
+ * last executed command.
+ *
+ * After the execution of every command or script, we run this list to check
+ * if as a result we should serve data to clients blocked, unblocking them.
+ * Note that server.ready_keys will not have duplicates as there dictionary
+ * also called ready_keys in every structure representing a Redis database,
+ * where we make sure to remember if a given key was already added in the
+ * server.ready_keys list. */
+type ReadyKey struct {
+	DB  *RedigoDB
+	Key string
 }
 
 /* =================================server init methods ======================================= */
@@ -375,7 +394,7 @@ func (r *RedigoServer) Init() {
 	for i := 0; i < r.DBNum; i++ {
 		db := NewDB()
 		db.id = i
-		// db.server = r
+		db.server = r
 
 		r.dbs[i] = db
 	}
@@ -446,7 +465,7 @@ func (r *RedigoServer) listen() {
 					c := NewClient()
 					c.server = r
 					c.conn = conn
-					c.Init()
+					c.init()
 					r.newClient <- c
 
 				}
@@ -480,11 +499,13 @@ func (r *RedigoServer) RedigoLog(level int, fm string, objs ...interface{}) {
  * other operations can be performed by the caller. Otherwise
  * if 0 is returned the client was destroyed (i.e. after QUIT). */
 func (r *RedigoServer) processCommand(c redigo.CommandArg) bool {
+	// Let the client know the command done
+	defer func() { c.Client.(*RedigoClient).cmddone <- struct{}{} }()
 	/* Now lookup the command and check ASAP about trivial error conditions
 	 * such as wrong arity, bad command name and so forth. */
-	// r.RedigoLog(REDIS_DEBUG, "Processing command: %s", c.Argv)
 
 	cmd, ok := r.Commands[strings.ToLower(c.Argv[0])]
+	c.Client.(*RedigoClient).lastcmd = cmd
 	if !ok {
 		c.AddReplyError(fmt.Sprintf("unknown command '%s'", c.Argv[0]))
 		return true
@@ -494,6 +515,10 @@ func (r *RedigoServer) processCommand(c redigo.CommandArg) bool {
 	}
 
 	r.call(c, cmd)
+	// If there are clients blocked on lists
+	if len(r.readyKeys) > 0 {
+		r.handleClientsBlockedOnLists()
+	}
 	return true
 }
 
@@ -512,6 +537,96 @@ func (r *RedigoServer) call(c redigo.CommandArg, cmd *RedigoCommand) {
 	cmd.Calls++
 
 	r.StatNumCommands++
+}
+
+/* This function should be called by Redis every time a single command,
+ * a MULTI/EXEC block, or a Lua script, terminated its execution after
+ * being called by a client.
+ *
+ * All the keys with at least one client blocked that received at least
+ * one new element via some PUSH operation are accumulated into
+ * the server.ready_keys list. This function will run the list and will
+ * serve clients accordingly. Note that the function will iterate again and
+ * again as a result of serving BRPOPLPUSH we can have new blocking clients
+ * to serve because of the PUSH side of BRPOPLPUSH. */
+func (r *RedigoServer) handleClientsBlockedOnLists() {
+	l := r.readyKeys
+	for len(l) > 0 {
+		rk := l[0]
+		/* First of all remove this key from db->ready_keys so that
+		 * we can safely call signalListAsReady() against this key. */
+		delete(rk.DB.readyKeys, rk.Key)
+
+		/* If the key exists and it's a list, serve blocked clients
+		 * with data. */
+		if o, ok := rk.DB.LookupKeyWrite(rk.Key).(rtype.List); ok {
+			/* We serve clients in the same order they blocked for
+			 * this key, from the first blocked to the last. */
+			if cls, ok := rk.DB.blockingKeys[rk.Key]; ok {
+				for i := 0; i < len(cls); i++ {
+					var where int
+					var reciever *RedigoClient = cls[i]
+					var val rtype.String
+
+					if reciever.lastcmd != nil && reciever.lastcmd.Name == "blpop" {
+						where = rtype.REDIS_LIST_HEAD
+						val = o.PopFront().Value()
+					} else {
+						where = rtype.REDIS_LIST_TAIL
+						val = o.PopBack().Value()
+					}
+
+					if val != nil {
+						reciever.unblock(true)
+						if !r.serveClientBlockedOnList(reciever, rk.Key, rk.DB, val, where) {
+							/* If we failed serving the client we need
+							 * to also undo the POP operation. */
+							if where == rtype.REDIS_LIST_HEAD {
+								o.PushFront(val)
+							} else {
+								o.PushBack(val)
+							}
+						}
+					} else {
+						// ???
+						break
+					}
+				}
+			}
+			if o.Len() == 0 {
+				rk.DB.Delete(rk.Key)
+			}
+			/* We don't call signalModifiedKey() as it was already called
+			 * when an element was pushed on the list. */
+		}
+		l = append(l[:0], l[1:]...)
+	}
+}
+
+/* This is a helper function for handleClientsBlockedOnLists(). It's work
+ * is to serve a specific client (receiver) that is blocked on 'key'
+ * in the context of the specified 'db', doing the following:
+ *
+ * 1) Provide the client with the 'value' element.
+ * 2) If the dstkey is not NULL (we are serving a BRPOPLPUSH) also push the
+ *    'value' element on the destination list (the LPUSH side of the command).
+ * 3) Propagate the resulting BRPOP, BLPOP and additional LPUSH if any into
+ *    the AOF and replication channel.
+ *
+ * The argument 'where' is REDIS_TAIL or REDIS_HEAD, and indicates if the
+ * 'value' element was popped fron the head (BLPOP) or tail (BRPOP) so that
+ * we can propagate the command properly.
+ *
+ * The function returns REDIS_OK if we are able to serve the client, otherwise
+ * REDIS_ERR is returned to signal the caller that the list POP operation
+ * should be undone as the client was not served: This only happens for
+ * BRPOPLPUSH that fails to push the value to the destination key as it is
+ * of the wrong type. */
+func (r *RedigoServer) serveClientBlockedOnList(receiver *RedigoClient, key string, db *RedigoDB, val rtype.String, where int) bool {
+	receiver.AddReplyMultiBulkLen(2)
+	receiver.AddReplyBulk(key)
+	receiver.AddReplyBulk(val.String())
+	return true
 }
 
 /*=========================================== Shutdown ======================================== */

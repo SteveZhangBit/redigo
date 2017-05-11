@@ -1,6 +1,9 @@
 package redigo
 
-import "bufio"
+import (
+	"bufio"
+	"time"
+)
 
 const (
 	Version = "0.0.1"
@@ -14,6 +17,7 @@ const (
 	COne           = ":1\r\n"
 	CNegOne        = ":-1\r\n"
 	NullBulk       = "$-1\r\n"
+	NullMultiBulk  = "*-1\r\n"
 	EmptyMultiBulk = "*0\r\n"
 	Pong           = "+PONG\r\n"
 	WrongTypeErr   = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n"
@@ -32,6 +36,8 @@ const (
 	REDIS_NOTIFY_GENERIC
 )
 
+/* With multiplexing we need to take per-client state.
+ * Clients are taken in a linked list. */
 type Client interface {
 	ProtocolWriter
 	ProtocolReader
@@ -40,12 +46,11 @@ type Client interface {
 
 	DB() DB
 	Server() Server
-	Init()
-	Close()
-	IsClosed() bool
 
 	LookupKeyReadOrReply(key string, reply string) interface{}
 	LookupKeyWriteOrReply(key string, reply string) interface{}
+
+	BlockForKeys(keys []string, timeout time.Duration)
 }
 
 type ProtocolWriter interface {
@@ -70,6 +75,9 @@ type Server interface {
 	// RedigoLog(level int, fm string, objs ...interface{})
 }
 
+/* Redis database representation. There are multiple databases identified
+ * by integers from 0 (the default database) up to the max configured
+ * database. The database number is the 'id' field in the structure. */
 type DB interface {
 	GetID() int
 
@@ -85,7 +93,8 @@ type DB interface {
 	RandomKey() (key string)
 
 	SignalModifyKey(key string)
-	SignalListAsReady(key string)
+
+	ExpireIfNeed(key string) bool
 }
 
 type PubSub interface {

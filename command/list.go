@@ -1,6 +1,8 @@
 package command
 
 import (
+	"time"
+
 	"github.com/SteveZhangBit/redigo"
 	"github.com/SteveZhangBit/redigo/rtype"
 	"github.com/SteveZhangBit/redigo/rtype/list"
@@ -426,12 +428,97 @@ func RPOPLPUSHCommand(c redigo.CommandArg) {
 
 }
 
-func BLPOPCommand(c redigo.CommandArg) {
+/*============================== blocking APIs ========================================*/
 
+/* This is how the current blocking POP works, we use BLPOP as example:
+ * - If the user calls BLPOP and the key exists and contains a non empty list
+ *   then LPOP is called instead. So BLPOP is semantically the same as LPOP
+ *   if blocking is not required.
+ * - If instead BLPOP is called and the key does not exists or the list is
+ *   empty we need to block. In order to do so we remove the notification for
+ *   new data to read in the client socket (so that we'll not serve new
+ *   requests if the blocking request is not served). Also we put the client
+ *   in a dictionary (db->blocking_keys) mapping keys to a list of clients
+ *   blocking for this keys.
+ * - If a PUSH operation against a key with blocked clients waiting is
+ *   performed, we mark this key as "ready", and after the current command,
+ *   MULTI/EXEC block, or script, is executed, we serve all the clients waiting
+ *   for this list, from the one that blocked first, to the last, accordingly
+ *   to the number of elements we have in the ready list.
+ */
+
+func GetTimeoutFromStringOrReply(c redigo.CommandArg, o string, unit time.Duration) (t time.Duration, ok bool) {
+	var x int64
+
+	if x, ok = GetInt64FromStringOrReply(c, o, "timeout is not an integer or out of range"); !ok {
+		return
+	}
+
+	if x < 0 {
+		c.AddReplyError("timeout is negtive")
+		ok = false
+		return
+	}
+
+	t = time.Duration(x) * unit
+	return
+}
+
+func listBlockingPop(c redigo.CommandArg, where int) {
+	var l rtype.List
+	var timeout time.Duration
+	var ok bool
+
+	if timeout, ok = GetTimeoutFromStringOrReply(c, c.Argv[c.Argc-1], time.Second); !ok {
+		return
+	}
+
+	for i := 1; i < c.Argc-1; i++ {
+		if o := c.DB().LookupKeyWrite(c.Argv[i]); o != nil {
+			if l, ok = o.(rtype.List); !ok {
+				c.AddReply(redigo.WrongTypeErr)
+				return
+			}
+			if l.Len() != 0 {
+				// Non empty list, this is like a non normal [LR]POP
+				var event string
+				var val rtype.String
+				if where == rtype.REDIS_LIST_HEAD {
+					event = "lpop"
+					val = l.PopFront().Value()
+				} else {
+					event = "rpop"
+					val = l.PopBack().Value()
+				}
+
+				c.AddReplyMultiBulkLen(2)
+				c.AddReplyBulk(c.Argv[i])
+				c.AddReplyBulk(val.String())
+				c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_LIST, event, c.Argv[i], c.DB().GetID())
+
+				if l.Len() == 0 {
+					c.DB().Delete(c.Argv[i])
+					c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "del", c.Argv[i], c.DB().GetID())
+				}
+				c.DB().SignalModifyKey(c.Argv[i])
+				c.Server().AddDirty(1)
+
+				// At least one list is non-empty, so return
+				return
+			}
+		}
+	}
+
+	// If the list is empty or the key does not exists we must block
+	c.Client.BlockForKeys(c.Argv[1:c.Argc-1], timeout)
+}
+
+func BLPOPCommand(c redigo.CommandArg) {
+	listBlockingPop(c, rtype.REDIS_LIST_HEAD)
 }
 
 func BRPOPCommand(c redigo.CommandArg) {
-
+	listBlockingPop(c, rtype.REDIS_LIST_TAIL)
 }
 
 func BRPOPLPUSHCommand(c redigo.CommandArg) {

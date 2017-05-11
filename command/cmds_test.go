@@ -2,6 +2,7 @@ package command
 
 import (
 	"testing"
+	"time"
 
 	"github.com/SteveZhangBit/redigo"
 )
@@ -94,6 +95,10 @@ func (c *TestClient) LookupKeyWriteOrReply(key string, reply string) interface{}
 	return x
 }
 
+func (c *TestClient) BlockForKeys(keys []string, timeout time.Duration) {
+
+}
+
 type TestServer struct {
 	Closed bool
 	Dirty  int
@@ -164,10 +169,6 @@ func (d *TestDB) RandomKey() (key string) {
 }
 
 func (d *TestDB) SignalModifyKey(key string) {
-
-}
-
-func (d *TestDB) SignalListAsReady(key string) {
 
 }
 

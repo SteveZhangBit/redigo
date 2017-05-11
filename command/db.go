@@ -17,7 +17,17 @@ func FLUSHALLCommand(c redigo.CommandArg) {
 }
 
 func DELCommand(c redigo.CommandArg) {
-
+	var deleted int64
+	for i := 0; i < c.Argc; i++ {
+		c.DB().ExpireIfNeed(c.Argv[i])
+		if c.DB().Delete(c.Argv[i]) {
+			c.DB().SignalModifyKey(c.Argv[i])
+			c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "del", c.Argv[i], c.DB().GetID())
+			c.Server().AddDirty(1)
+			deleted++
+		}
+	}
+	c.AddReplyInt64(deleted)
 }
 
 /* EXISTS key1 key2 ... key_N.

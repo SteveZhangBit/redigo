@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/SteveZhangBit/redigo/rtype/list"
+	"github.com/SteveZhangBit/redigo/rtype"
 )
 
 func init() {
@@ -13,20 +13,22 @@ func init() {
 }
 
 type RedigoDB struct {
-	id int
-	// server *RedigoServer
+	id     int
+	server *RedigoServer
+
+	blockingKeys map[string][]*RedigoClient
+	readyKeys    map[string]struct{}
 
 	dict    map[string]interface{}
 	expires map[string]time.Time
-
-	KeyspaceMisses int
-	KeyspaceHits   int
 }
 
 func NewDB() *RedigoDB {
 	return &RedigoDB{
-		dict:    make(map[string]interface{}),
-		expires: make(map[string]time.Time),
+		dict:         make(map[string]interface{}),
+		expires:      make(map[string]time.Time),
+		blockingKeys: make(map[string][]*RedigoClient),
+		readyKeys:    make(map[string]struct{}),
 	}
 }
 
@@ -44,19 +46,19 @@ func (r *RedigoDB) LookupKey(key string) interface{} {
 }
 
 func (r *RedigoDB) LookupKeyRead(key string) interface{} {
-	r.expireIfNeed(key)
+	r.ExpireIfNeed(key)
 
 	if o, ok := r.dict[key]; !ok {
-		r.KeyspaceMisses++
+		r.server.keyspaceMisses++
 		return nil
 	} else {
-		r.KeyspaceHits++
+		r.server.keyspaceHits++
 		return o
 	}
 }
 
 func (r *RedigoDB) LookupKeyWrite(key string) interface{} {
-	r.expireIfNeed(key)
+	r.ExpireIfNeed(key)
 	return r.LookupKey(key)
 }
 
@@ -67,8 +69,8 @@ func (r *RedigoDB) LookupKeyWrite(key string) interface{} {
 func (r *RedigoDB) Add(key string, val interface{}) {
 	if _, ok := r.dict[key]; !ok {
 		r.dict[key] = val
-		if _, ok = val.(*list.LinkedList); ok {
-			r.SignalListAsReady(key)
+		if _, ok = val.(rtype.List); ok {
+			r.signalListAsReady(key)
 		}
 	} else {
 		panic(fmt.Sprintf("The key %s already exists.", key))
@@ -125,7 +127,7 @@ func (r *RedigoDB) RandomKey() (key string) {
 
 	for {
 		key = keys[rand.Intn(len(keys))]
-		if r.expireIfNeed(key) {
+		if r.ExpireIfNeed(key) {
 			continue
 		}
 		return
@@ -145,15 +147,31 @@ func (r *RedigoDB) SignalModifyKey(key string) {
 
 }
 
-func (r *RedigoDB) SignalListAsReady(key string) {
+func (r *RedigoDB) signalListAsReady(key string) {
+	// No clients blocking for this key? No need to queue it
+	if _, ok := r.blockingKeys[key]; !ok {
+		return
+	}
+	// Key was already signaled? No need to queue it again
+	if _, ok := r.readyKeys[key]; ok {
+		return
+	}
 
+	// Ok, we need to queue this key into server.ready_keys
+	rk := ReadyKey{DB: r, Key: key}
+	r.server.readyKeys = append(r.server.readyKeys, rk)
+
+	/* We also add the key in the db->ready_keys dictionary in order
+	 * to avoid adding it multiple times into a list with a simple O(1)
+	 * check. */
+	r.readyKeys[key] = struct{}{}
 }
 
 /*-----------------------------------------------------------------------------
  * Expires API
  *----------------------------------------------------------------------------*/
 
-func (r *RedigoDB) expireIfNeed(key string) bool {
+func (r *RedigoDB) ExpireIfNeed(key string) bool {
 	return false
 }
 
