@@ -84,7 +84,7 @@ func (r *RedigoClient) Server() redigo.Server {
 }
 
 func (r *RedigoClient) init() {
-	r.selectDB(0)
+	r.SelectDB(0)
 
 	go r.readNextCommand()
 	go r.sendReplyToClient()
@@ -94,7 +94,7 @@ func (r *RedigoClient) CommandDone() {
 	r.cmddone <- struct{}{}
 }
 
-func (r *RedigoClient) selectDB(id int) bool {
+func (r *RedigoClient) SelectDB(id int) bool {
 	if id < 0 || id > len(r.server.dbs) {
 		return false
 	} else {

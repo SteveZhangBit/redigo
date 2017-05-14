@@ -20,13 +20,13 @@ type RedigoDB struct {
 	readyKeys    map[string]struct{}
 
 	dict    map[string]interface{}
-	expires map[string]time.Time
+	expires map[string]time.Duration
 }
 
 func NewDB() *RedigoDB {
 	return &RedigoDB{
 		dict:         make(map[string]interface{}),
-		expires:      make(map[string]time.Time),
+		expires:      make(map[string]time.Duration),
 		blockingKeys: make(map[string][]*RedigoClient),
 		readyKeys:    make(map[string]struct{}),
 	}
@@ -34,6 +34,10 @@ func NewDB() *RedigoDB {
 
 func (r *RedigoDB) GetID() int {
 	return r.id
+}
+
+func (r *RedigoDB) GetDict() map[string]interface{} {
+	return r.dict
 }
 
 func (r *RedigoDB) LookupKey(key string) interface{} {
@@ -173,6 +177,14 @@ func (r *RedigoDB) signalListAsReady(key string) {
 
 func (r *RedigoDB) ExpireIfNeed(key string) bool {
 	return false
+}
+
+func (r *RedigoDB) GetExpire(key string) time.Duration {
+	return time.Duration(-1)
+}
+
+func (r *RedigoDB) SetExpire(key string, t time.Duration) {
+
 }
 
 func (r *RedigoDB) removeExpire(key string) {

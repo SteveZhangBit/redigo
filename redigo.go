@@ -25,6 +25,7 @@ const (
 	SyntaxErr      = "-ERR syntax error\r\n"
 	NoKeyErr       = "-ERR no such key\r\n"
 	OutOfRangeErr  = "-ERR index out of range\r\n"
+	SameObjectErr  = "-ERR source and destination objects are the same\r\n"
 )
 
 const (
@@ -46,6 +47,7 @@ type Client interface {
 
 	DB() DB
 	Server() Server
+	SelectDB(id int) bool
 
 	LookupKeyReadOrReply(key string, reply string) interface{}
 	LookupKeyWriteOrReply(key string, reply string) interface{}
@@ -80,6 +82,7 @@ type Server interface {
  * database. The database number is the 'id' field in the structure. */
 type DB interface {
 	GetID() int
+	GetDict() map[string]interface{}
 
 	LookupKey(key string) interface{}
 	LookupKeyRead(key string) interface{}
@@ -95,6 +98,8 @@ type DB interface {
 	SignalModifyKey(key string)
 
 	ExpireIfNeed(key string) bool
+	GetExpire(key string) time.Duration
+	SetExpire(key string, t time.Duration)
 }
 
 type PubSub interface {

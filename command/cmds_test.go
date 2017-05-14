@@ -71,6 +71,10 @@ func (c *TestClient) Init() {
 
 }
 
+func (c *TestClient) SelectDB(id int) bool {
+	return true
+}
+
 func (c *TestClient) Close() {
 
 }
@@ -124,6 +128,10 @@ func (d *TestDB) GetID() int {
 	return 0
 }
 
+func (d *TestDB) GetDict() map[string]interface{} {
+	return d.Dict
+}
+
 func (d *TestDB) LookupKey(key string) interface{} {
 	o, _ := d.Dict[key]
 	return o
@@ -169,6 +177,18 @@ func (d *TestDB) RandomKey() (key string) {
 }
 
 func (d *TestDB) SignalModifyKey(key string) {
+
+}
+
+func (d *TestDB) ExpireIfNeed(key string) bool {
+	return false
+}
+
+func (d *TestDB) GetExpire(key string) time.Duration {
+	return time.Duration(-1)
+}
+
+func (d *TestDB) SetExpire(key string, t time.Duration) {
 
 }
 
