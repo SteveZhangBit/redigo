@@ -71,10 +71,8 @@ type ProtocolReader interface {
 }
 
 type Server interface {
-	Init()
 	PrepareForShutdown() bool
 	AddDirty(i int)
-	// RedigoLog(level int, fm string, objs ...interface{})
 }
 
 /* Redis database representation. There are multiple databases identified

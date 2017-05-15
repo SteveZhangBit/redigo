@@ -403,8 +403,8 @@ func (r *RedigoServer) Init() {
 	r.StatStartTime = time.Now()
 
 	// Add system interrupt listener
-	r.signalHandler()
-
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt)
 	// Waiting to process commands, add clients or remove closed clients
 	for {
 		select {
@@ -422,24 +422,15 @@ func (r *RedigoServer) Init() {
 
 		case c := <-r.nextToProc:
 			r.processCommand(c)
-		}
-	}
-}
 
-func (r *RedigoServer) signalHandler() {
-	// Add system interrupt listener
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
-	go func() {
-		for {
-			<-interrupt
+		case <-interrupt:
 			r.RedigoLog(REDIS_WARNING, "Received SIGINT scheduling shutdown...")
 			if r.PrepareForShutdown() {
-				os.Exit(0)
+				return
 			}
 			r.RedigoLog(REDIS_WARNING, "SIGTERM received but errors trying to shut down the server, check the logs for more information")
 		}
-	}()
+	}
 }
 
 func (r *RedigoServer) listen() {

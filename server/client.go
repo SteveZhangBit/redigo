@@ -44,7 +44,6 @@ type RedigoClient struct {
 
 	conn    net.Conn
 	outbuf  chan string
-	closed  chan struct{}
 	cmddone chan struct{}
 	lastcmd *RedigoCommand
 
@@ -60,17 +59,11 @@ type ClientBlockState struct {
 func NewClient() *RedigoClient {
 	c := &RedigoClient{
 		outbuf:  make(chan string, 10),
-		closed:  make(chan struct{}),
 		cmddone: make(chan struct{}),
 		bpop:    &ClientBlockState{Keys: make(map[string]struct{})},
 		blocked: make(chan struct{}),
 	}
-	c.RESPWriter = redigo.NewRESPWriterFunc(func(x string) {
-		if c.Flags&REDIS_CLOSE_AFTER_REPLY > 0 {
-			return
-		}
-		c.outbuf <- x
-	})
+	c.RESPWriter = redigo.NewRESPWriterFunc(c.sendReplyToClient)
 
 	return c
 }
@@ -87,7 +80,6 @@ func (r *RedigoClient) init() {
 	r.SelectDB(0)
 
 	go r.readNextCommand()
-	go r.sendReplyToClient()
 }
 
 func (r *RedigoClient) CommandDone() {
@@ -103,21 +95,15 @@ func (r *RedigoClient) SelectDB(id int) bool {
 	}
 }
 
-func (r *RedigoClient) sendReplyToClient() {
-	for !r.isClosed() {
-		select {
-		case x := <-r.outbuf:
-			if _, err := r.conn.Write([]byte(x)); err != nil {
-				r.server.RedigoLog(REDIS_VERBOSE, "Error writing to client: %s", err)
-				r.close()
-			}
-		default:
-			if r.Flags&REDIS_CLOSE_AFTER_REPLY > 0 {
-				r.close()
-			}
-		}
-
+func (r *RedigoClient) sendReplyToClient(x string) {
+	if _, err := r.conn.Write([]byte(x)); err != nil {
+		r.server.RedigoLog(REDIS_VERBOSE, "Error writing to client: %s", err)
+		r.close()
 	}
+	if r.Flags&REDIS_CLOSE_AFTER_REPLY > 0 {
+		r.close()
+	}
+
 }
 
 func (r *RedigoClient) readNextCommand() {
@@ -172,21 +158,9 @@ func (r *RedigoClient) setProtocolError() {
 }
 
 func (r *RedigoClient) close() {
-	if !r.isClosed() {
-		r.server.RedigoLog(REDIS_DEBUG, "Closing connection on: %s", r.conn.RemoteAddr())
-		r.conn.Close()
-		close(r.closed)
-		r.server.delClient <- r
-	}
-}
-
-func (r *RedigoClient) isClosed() bool {
-	select {
-	case <-r.closed:
-		return true
-	default:
-		return false
-	}
+	r.server.RedigoLog(REDIS_DEBUG, "Closing connection on: %s", r.conn.RemoteAddr())
+	r.conn.Close()
+	r.server.delClient <- r
 }
 
 func (r *RedigoClient) LookupKeyReadOrReply(key string, reply string) interface{} {

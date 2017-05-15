@@ -67,20 +67,8 @@ func (c *TestClient) Server() redigo.Server {
 	return c.server
 }
 
-func (c *TestClient) Init() {
-
-}
-
 func (c *TestClient) SelectDB(id int) bool {
 	return true
-}
-
-func (c *TestClient) Close() {
-
-}
-
-func (c *TestClient) IsClosed() bool {
-	return false
 }
 
 func (c *TestClient) LookupKeyReadOrReply(key string, reply string) interface{} {
@@ -106,10 +94,6 @@ func (c *TestClient) BlockForKeys(keys []string, timeout time.Duration) {
 type TestServer struct {
 	Closed bool
 	Dirty  int
-}
-
-func (s *TestServer) Init() {
-
 }
 
 func (s *TestServer) PrepareForShutdown() bool {

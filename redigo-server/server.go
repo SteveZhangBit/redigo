@@ -1,6 +1,10 @@
 package main
 
 import (
+	"flag"
+	"log"
+	"os"
+	"runtime/pprof"
 	"unsafe"
 
 	"github.com/SteveZhangBit/redigo"
@@ -26,8 +30,22 @@ const Logo = "\n" +
 	"          `-._        _.-'                                           \n" +
 	"              `-.__.-'                                               \n"
 
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile `file`")
+
 func main() {
 	// TODO: initServerConfig
+
+	flag.Parse()
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
 
 	s := server.NewServer()
 	s.RedigoLog(server.REDIS_NOTICE|server.REDIS_LOG_RAW,
