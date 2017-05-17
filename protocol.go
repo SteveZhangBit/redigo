@@ -153,7 +153,7 @@ func splitInlineArgs(line []rune) ([]string, bool) {
 	return argv, true
 }
 
-func (r *RESPReader) ReadInlineCommand(line string, c Client) (arg CommandArg, err error) {
+func (r *RESPReader) ReadInlineCommand(line string) (arg CommandArg, err error) {
 	if len(line) > REDIS_INLINE_MAXSIZE {
 		err = errors.New("Protocol error: too big inline request")
 		return
@@ -165,12 +165,11 @@ func (r *RESPReader) ReadInlineCommand(line string, c Client) (arg CommandArg, e
 	} else {
 		arg.Argc = len(argv)
 		arg.Argv = argv
-		arg.Client = c
 	}
 	return
 }
 
-func (r *RESPReader) ReadMultiBulkCommand(scanner *bufio.Scanner, c Client) (arg CommandArg, err error) {
+func (r *RESPReader) ReadMultiBulkCommand(scanner *bufio.Scanner) (arg CommandArg, err error) {
 	var line string
 
 	// Read multi builk length
@@ -225,6 +224,5 @@ func (r *RESPReader) ReadMultiBulkCommand(scanner *bufio.Scanner, c Client) (arg
 
 	arg.Argc = len(argv)
 	arg.Argv = argv
-	arg.Client = c
 	return
 }

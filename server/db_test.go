@@ -22,10 +22,10 @@ func TestDBAdd(t *testing.T) {
 func TestDBLookupRead(t *testing.T) {
 	db := NewDB()
 	db.Add("foo", "bar")
-	if db.LookupKeyRead("foo") != "bar" || db.KeyspaceHits != 1 {
+	if db.LookupKeyRead("foo") != "bar" || db.server.keyspaceHits != 1 {
 		t.Error("LookupKeyRead: when exists failed")
 	}
-	if db.LookupKeyRead("bar") != nil || db.KeyspaceMisses != 1 {
+	if db.LookupKeyRead("bar") != nil || db.server.keyspaceMisses != 1 {
 		t.Error("LookupKeyRead: when not exists failed")
 	}
 }

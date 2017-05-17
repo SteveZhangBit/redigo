@@ -1,7 +1,7 @@
 package rtype
 
 const (
-	REDIS_HASH_KEY = (1 << iota)
+	REDIS_HASH_KEY = 1 << iota
 	REDIS_HASH_VALUE
 )
 

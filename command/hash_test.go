@@ -73,12 +73,12 @@ func TestHMSET(t *testing.T) {
 
 	HMSETCommand(NewCommand(fake, "hmset", "s", "foo", "bar", "fooo"))
 	if fake.CompareErr(t, "wrong number of arguments for HMSET") {
-		t.Error("hmset: when c.Argc%2 == 1")
+		t.Error("hmset: when c.Argc %% 2 == 1")
 	}
 
 	HMSETCommand(NewCommand(fake, "hmset", "s", "foo", "bar", "fooo", "barrr"))
 	if fake.CompareText(t, redigo.OK) {
-		t.Error("hmset: when c.Argc%2 == 0")
+		t.Error("hmset: when c.Argc %% 2 == 0")
 	}
 	HGETCommand(NewCommand(fake, "hget", "s", "fooo"))
 	if fake.CompareBulk(t, "barrr") {

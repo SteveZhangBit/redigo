@@ -66,8 +66,8 @@ type ProtocolWriter interface {
 }
 
 type ProtocolReader interface {
-	ReadInlineCommand(line string, c Client) (CommandArg, error)
-	ReadMultiBulkCommand(scanner *bufio.Scanner, c Client) (CommandArg, error)
+	ReadInlineCommand(line string) (CommandArg, error)
+	ReadMultiBulkCommand(scanner *bufio.Scanner) (CommandArg, error)
 }
 
 type Server interface {

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/SteveZhangBit/redigo"
@@ -283,8 +284,8 @@ type RedigoServer struct {
 	// Logging
 	Verbosity int
 	// Command
-	Commands   map[string]*RedigoCommand
-	nextToProc chan redigo.CommandArg
+	Commands map[string]*RedigoCommand
+	procLock sync.Mutex
 	// DB
 	DBNum int
 	dbs   []*RedigoDB
@@ -320,14 +321,13 @@ type ReadyKey struct {
 
 func NewServer() *RedigoServer {
 	s := &RedigoServer{
-		PID:        os.Getpid(),
-		Port:       6379,
-		BindAddr:   []string{""},
-		newClient:  make(chan *RedigoClient, 1),
-		delClient:  make(chan *RedigoClient, 1),
-		Verbosity:  REDIS_DEBUG,
-		nextToProc: make(chan redigo.CommandArg, 1),
-		DBNum:      4,
+		PID:       os.Getpid(),
+		Port:      6379,
+		BindAddr:  []string{""},
+		newClient: make(chan *RedigoClient, 1),
+		delClient: make(chan *RedigoClient, 1),
+		Verbosity: REDIS_DEBUG,
+		DBNum:     4,
 	}
 	s.clients = list.New()
 	s.clients.Init()
@@ -420,9 +420,6 @@ func (r *RedigoServer) Init() {
 				}
 			}
 
-		case c := <-r.nextToProc:
-			r.processCommand(c)
-
 		case <-interrupt:
 			r.RedigoLog(REDIS_WARNING, "Received SIGINT scheduling shutdown...")
 			if r.PrepareForShutdown() {
@@ -490,8 +487,8 @@ func (r *RedigoServer) RedigoLog(level int, fm string, objs ...interface{}) {
  * other operations can be performed by the caller. Otherwise
  * if 0 is returned the client was destroyed (i.e. after QUIT). */
 func (r *RedigoServer) processCommand(c redigo.CommandArg) bool {
-	// Let the client know the command done
-	defer func() { c.Client.(*RedigoClient).cmddone <- struct{}{} }()
+	r.procLock.Lock()
+	defer r.procLock.Unlock()
 	/* Now lookup the command and check ASAP about trivial error conditions
 	 * such as wrong arity, bad command name and so forth. */
 

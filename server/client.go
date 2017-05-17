@@ -42,10 +42,9 @@ type RedigoClient struct {
 	db     *RedigoDB
 	server *RedigoServer
 
-	conn    net.Conn
-	outbuf  chan string
-	cmddone chan struct{}
-	lastcmd *RedigoCommand
+	conn      net.Conn
+	outwriter *bufio.Writer
+	lastcmd   *RedigoCommand
 
 	bpop    *ClientBlockState
 	blocked chan struct{}
@@ -58,8 +57,6 @@ type ClientBlockState struct {
 
 func NewClient() *RedigoClient {
 	c := &RedigoClient{
-		outbuf:  make(chan string, 10),
-		cmddone: make(chan struct{}),
 		bpop:    &ClientBlockState{Keys: make(map[string]struct{})},
 		blocked: make(chan struct{}),
 	}
@@ -76,16 +73,6 @@ func (r *RedigoClient) Server() redigo.Server {
 	return r.server
 }
 
-func (r *RedigoClient) init() {
-	r.SelectDB(0)
-
-	go r.readNextCommand()
-}
-
-func (r *RedigoClient) CommandDone() {
-	r.cmddone <- struct{}{}
-}
-
 func (r *RedigoClient) SelectDB(id int) bool {
 	if id < 0 || id > len(r.server.dbs) {
 		return false
@@ -95,15 +82,33 @@ func (r *RedigoClient) SelectDB(id int) bool {
 	}
 }
 
+func (r *RedigoClient) init() {
+	r.outwriter = bufio.NewWriter(r.conn)
+
+	r.SelectDB(0)
+	go r.readNextCommand()
+}
+
+func (r *RedigoClient) close() {
+	r.server.RedigoLog(REDIS_DEBUG, "Closing connection on: %s", r.conn.RemoteAddr())
+	r.conn.Close()
+	r.server.delClient <- r
+}
+
 func (r *RedigoClient) sendReplyToClient(x string) {
-	if _, err := r.conn.Write([]byte(x)); err != nil {
+	var err error
+	if _, err = r.outwriter.WriteString(x); err == nil {
+		err = r.outwriter.Flush()
+	}
+	if err != nil {
 		r.server.RedigoLog(REDIS_VERBOSE, "Error writing to client: %s", err)
 		r.close()
+		return
 	}
+
 	if r.Flags&REDIS_CLOSE_AFTER_REPLY > 0 {
 		r.close()
 	}
-
 }
 
 func (r *RedigoClient) readNextCommand() {
@@ -136,18 +141,17 @@ func (r *RedigoClient) readNextCommand() {
 		}
 
 		if line[0] != '*' {
-			arg, err = r.ReadInlineCommand(line, r)
+			arg, err = r.ReadInlineCommand(line)
 		} else {
-			arg, err = r.ReadMultiBulkCommand(scanner, r)
+			arg, err = r.ReadMultiBulkCommand(scanner)
 		}
 
 		if err != nil {
 			r.AddReplyError(err.Error())
 			r.setProtocolError()
 		} else {
-			r.server.nextToProc <- arg
-			// Wait until the command done
-			<-r.cmddone
+			arg.Client = r
+			r.server.processCommand(arg)
 		}
 	}
 	r.close()
@@ -155,12 +159,6 @@ func (r *RedigoClient) readNextCommand() {
 
 func (r *RedigoClient) setProtocolError() {
 	r.Flags |= REDIS_CLOSE_AFTER_REPLY
-}
-
-func (r *RedigoClient) close() {
-	r.server.RedigoLog(REDIS_DEBUG, "Closing connection on: %s", r.conn.RemoteAddr())
-	r.conn.Close()
-	r.server.delClient <- r
 }
 
 func (r *RedigoClient) LookupKeyReadOrReply(key string, reply string) interface{} {
@@ -178,6 +176,8 @@ func (r *RedigoClient) LookupKeyWriteOrReply(key string, reply string) interface
 	}
 	return x
 }
+
+/*================================= blocking APIs ======================================*/
 
 // Set a client in blocking mode for the specified key, with the specified timeout
 func (r *RedigoClient) BlockForKeys(keys []string, timeout time.Duration) {
