@@ -42,7 +42,7 @@ func TestHSETandHGET(t *testing.T) {
 	}
 
 	SETCommand(NewCommand(fake, "set", "s2", "bar"))
-	fake.Text = ""
+	fake.Flush()
 	HSETCommand(NewCommand(fake, "hset", "s2", "foo", "bar"))
 	if fake.CompareText(t, redigo.WrongTypeErr) {
 		t.Error("hset: when s exists but not a set")
@@ -78,7 +78,7 @@ func TestHMSET(t *testing.T) {
 
 	HMSETCommand(NewCommand(fake, "hmset", "s", "foo", "bar", "fooo", "barrr"))
 	if fake.CompareText(t, redigo.OK) {
-		t.Error("hmset: when c.Argc %% 2 == 0")
+		t.Error("hmset: when c.Argc %s% 2 == 0")
 	}
 	HGETCommand(NewCommand(fake, "hget", "s", "fooo"))
 	if fake.CompareBulk(t, "barrr") {
@@ -105,7 +105,7 @@ func TestHINCRBY(t *testing.T) {
 	}
 
 	HSETCommand(NewCommand(fake, "hset", "s", "foo", "bar"))
-	fake.Text = ""
+	fake.Flush()
 	HINCRBYCommand(NewCommand(fake, "hincrby", "s", "foo", "4"))
 	if fake.CompareErr(t, "hash value is not an integer") {
 		t.Error("hincry: when s and key foo exist, but not an integer")
@@ -126,7 +126,7 @@ func TestHINCRBYFLOAT(t *testing.T) {
 	}
 
 	HSETCommand(NewCommand(fake, "hset", "s", "foo", "bar"))
-	fake.Text = ""
+	fake.Flush()
 	HINCRBYFLOATCommand(NewCommand(fake, "hincrbyfloat", "s", "foo", "3.2"))
 	if fake.CompareErr(t, "hash value is not a valid float") {
 		t.Error("hincry: when s and key foo exist, but not an integer")
@@ -142,14 +142,14 @@ func TestHMGET(t *testing.T) {
 	}
 
 	HMSETCommand(NewCommand(fake, "hmset", "s", "foo", "bar"))
-	fake.Text = ""
+	fake.Flush()
 	HMGETCommand(NewCommand(fake, "hmget", "s", "foo", "fooo"))
 	if fake.CompareText(t, fmt.Sprintf("*2\r\n$3\r\nbar\r\n%s", redigo.NullBulk)) {
 		t.Error("hmget: when key foo exists but fooo not exist")
 	}
 
 	SETCommand(NewCommand(fake, "set", "s", "foo"))
-	fake.Text = ""
+	fake.Flush()
 	HMGETCommand(NewCommand(fake, "hmget", "s", "foo", "fooo"))
 	if fake.CompareText(t, redigo.WrongTypeErr) {
 		t.Error("hmget: when s is not a set")
@@ -165,14 +165,14 @@ func TestHDEL(t *testing.T) {
 	}
 
 	HMSETCommand(NewCommand(fake, "hmset", "s", "foo", "bar", "fooo", "barr"))
-	fake.Text = ""
+	fake.Flush()
 	HDELCommand(NewCommand(fake, "hdel", "s", "foo", "fooo", "foooo"))
 	if fake.CompareInt64(t, 2) {
 		t.Error("hdel: when foo, fooo exist, but foooo not exists")
 	}
 
 	SETCommand(NewCommand(fake, "set", "s", "foo"))
-	fake.Text = ""
+	fake.Flush()
 	HDELCommand(NewCommand(fake, "hdel", "s", "foo", "fooo", "foooo"))
 	if fake.CompareText(t, redigo.WrongTypeErr) {
 		t.Error("hdel: when s is not hset")
@@ -183,7 +183,7 @@ func TestHLEN(t *testing.T) {
 	fake := NewFakeClient()
 
 	HMSETCommand(NewCommand(fake, "hmset", "s", "foo", "bar", "fooo", "barr"))
-	fake.Text = ""
+	fake.Flush()
 	HLENCommand(NewCommand(fake, "hlen", "s"))
 	if fake.CompareInt64(t, 2) {
 		t.Error("hlen: when s has 2 keys")
@@ -194,7 +194,7 @@ func TestHEXISTS(t *testing.T) {
 	fake := NewFakeClient()
 
 	HSETCommand(NewCommand(fake, "hset", "s", "foo", "bar"))
-	fake.Text = ""
+	fake.Flush()
 	HEXISTSCommand(NewCommand(fake, "hexists", "s", "foo"))
 	if fake.CompareText(t, redigo.COne) {
 		t.Error("hexists: when foo exists")
@@ -210,16 +210,16 @@ func TestGETALL(t *testing.T) {
 	fake := NewFakeClient()
 
 	HMSETCommand(NewCommand(fake, "hmset", "s", "foo", "bar", "fooo", "barr"))
-	fake.Text = ""
+	fake.Flush()
 	HKEYSCommand(NewCommand(fake, "hkeys", "s"))
-	t.Logf("%q", fake.Text)
-	fake.Text = ""
+	t.Logf("%q", fake.Text())
+	fake.Flush()
 
 	HVALSCommand(NewCommand(fake, "hvals", "s"))
-	t.Logf("%q", fake.Text)
-	fake.Text = ""
+	t.Logf("%q", fake.Text())
+	fake.Flush()
 
 	HGETALLCommand(NewCommand(fake, "hgetall", "s"))
-	t.Logf("%q", fake.Text)
-	fake.Text = ""
+	t.Logf("%q", fake.Text())
+	fake.Flush()
 }

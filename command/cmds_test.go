@@ -1,11 +1,24 @@
 package command
 
 import (
+	"bytes"
 	"testing"
 	"time"
 
 	"github.com/SteveZhangBit/redigo"
 )
+
+type TextWriter struct {
+	Text []byte
+}
+
+func (w *TextWriter) Write(b []byte) {
+	w.Text = append(w.Text, b...)
+}
+
+func (w *TextWriter) Flush() {
+	w.Text = nil
+}
 
 type TestClient struct {
 	*redigo.RESPWriter
@@ -17,46 +30,56 @@ type TestClient struct {
 	server *TestServer
 }
 
-func (c *TestClient) CompareText(t *testing.T, x string) bool {
-	ok := c.Text != x
-	if ok {
-		t.Logf("need %q, get %q", x, c.Text)
+func (c *TestClient) Text() []byte {
+	return c.RESPWriter.Writer.(*TextWriter).Text
+}
+
+func (c *TestClient) CompareText(t *testing.T, x interface{}) (ok bool) {
+	switch s := x.(type) {
+	case string:
+		ok = string(c.Text()) != s
+	case []byte:
+		ok = !bytes.Equal(c.Text(), s)
 	}
-	c.Text = ""
-	return ok
+
+	if ok {
+		t.Logf("need %q, get %q", x, string(c.Text()))
+	}
+	c.Flush()
+	return
 }
 
 func (c *TestClient) CompareInt64(t *testing.T, x int64) bool {
-	writer := redigo.NewRESPWriter()
+	writer := redigo.NewRESPWriter(&TextWriter{})
 	writer.AddReplyInt64(x)
-	return c.CompareText(t, writer.Text)
+	return c.CompareText(t, writer.Writer.(*TextWriter).Text)
 }
 
 func (c *TestClient) CompareFloat64(t *testing.T, x float64) bool {
-	writer := redigo.NewRESPWriter()
+	writer := redigo.NewRESPWriter(&TextWriter{})
 	writer.AddReplyFloat64(x)
-	return c.CompareText(t, writer.Text)
+	return c.CompareText(t, writer.Writer.(*TextWriter).Text)
 }
 
 func (c *TestClient) CompareErr(t *testing.T, msg string) bool {
-	writer := redigo.NewRESPWriter()
+	writer := redigo.NewRESPWriter(&TextWriter{})
 	writer.AddReplyError(msg)
-	return c.CompareText(t, writer.Text)
+	return c.CompareText(t, writer.Writer.(*TextWriter).Text)
 }
 
 func (c *TestClient) CompareBulk(t *testing.T, x string) bool {
-	writer := redigo.NewRESPWriter()
-	writer.AddReplyBulk(x)
-	return c.CompareText(t, writer.Text)
+	writer := redigo.NewRESPWriter(&TextWriter{})
+	writer.AddReplyBulk([]byte(x))
+	return c.CompareText(t, writer.Writer.(*TextWriter).Text)
 }
 
 func (c *TestClient) CompareMultiBulk(t *testing.T, xs ...string) bool {
-	writer := redigo.NewRESPWriter()
+	writer := redigo.NewRESPWriter(&TextWriter{})
 	writer.AddReplyMultiBulkLen(len(xs))
 	for _, x := range xs {
-		writer.AddReplyBulk(x)
+		writer.AddReplyBulk([]byte(x))
 	}
-	return c.CompareText(t, writer.Text)
+	return c.CompareText(t, writer.Writer.(*TextWriter).Text)
 }
 
 func (c *TestClient) DB() redigo.DB {
@@ -71,7 +94,7 @@ func (c *TestClient) SelectDB(id int) bool {
 	return true
 }
 
-func (c *TestClient) LookupKeyReadOrReply(key string, reply string) interface{} {
+func (c *TestClient) LookupKeyReadOrReply(key []byte, reply []byte) interface{} {
 	x := c.db.LookupKeyRead(key)
 	if x == nil {
 		c.AddReply(reply)
@@ -79,7 +102,7 @@ func (c *TestClient) LookupKeyReadOrReply(key string, reply string) interface{} 
 	return x
 }
 
-func (c *TestClient) LookupKeyWriteOrReply(key string, reply string) interface{} {
+func (c *TestClient) LookupKeyWriteOrReply(key []byte, reply []byte) interface{} {
 	x := c.db.LookupKeyWrite(key)
 	if x == nil {
 		c.AddReply(reply)
@@ -87,7 +110,7 @@ func (c *TestClient) LookupKeyWriteOrReply(key string, reply string) interface{}
 	return x
 }
 
-func (c *TestClient) BlockForKeys(keys []string, timeout time.Duration) {
+func (c *TestClient) BlockForKeys(keys [][]byte, timeout time.Duration) {
 
 }
 
@@ -116,79 +139,87 @@ func (d *TestDB) GetDict() map[string]interface{} {
 	return d.Dict
 }
 
-func (d *TestDB) LookupKey(key string) interface{} {
-	o, _ := d.Dict[key]
+func (d *TestDB) LookupKey(key []byte) interface{} {
+	o, _ := d.Dict[string(key)]
 	return o
 }
 
-func (d *TestDB) LookupKeyRead(key string) interface{} {
+func (d *TestDB) LookupKeyRead(key []byte) interface{} {
 	return d.LookupKey(key)
 }
 
-func (d *TestDB) LookupKeyWrite(key string) interface{} {
+func (d *TestDB) LookupKeyWrite(key []byte) interface{} {
 	return d.LookupKey(key)
 }
 
-func (d *TestDB) Add(key string, val interface{}) {
-	d.Dict[key] = val
+func (d *TestDB) Add(key []byte, val interface{}) {
+	d.Dict[string(key)] = val
 }
 
-func (d *TestDB) Update(key string, val interface{}) {
-	d.Dict[key] = val
+func (d *TestDB) Update(key []byte, val interface{}) {
+	d.Dict[string(key)] = val
 }
 
-func (d *TestDB) Delete(key string) (ok bool) {
-	if _, ok = d.Dict[key]; ok {
-		delete(d.Dict, key)
+func (d *TestDB) Delete(key []byte) (ok bool) {
+	if _, ok = d.Dict[string(key)]; ok {
+		delete(d.Dict, string(key))
 	}
 	return
 }
 
-func (d *TestDB) SetKeyPersist(key string, val interface{}) {
-	d.Dict[key] = val
+func (d *TestDB) SetKeyPersist(key []byte, val interface{}) {
+	d.Dict[string(key)] = val
 }
 
-func (d *TestDB) Exists(key string) (ok bool) {
-	_, ok = d.Dict[key]
+func (d *TestDB) Exists(key []byte) (ok bool) {
+	_, ok = d.Dict[string(key)]
 	return
 }
 
-func (d *TestDB) RandomKey() (key string) {
+func (d *TestDB) RandomKey() (key []byte) {
 	for key := range d.Dict {
-		return key
+		return []byte(key)
 	}
-	return ""
+	return []byte{}
 }
 
-func (d *TestDB) SignalModifyKey(key string) {
+func (d *TestDB) SignalModifyKey(key []byte) {
 
 }
 
-func (d *TestDB) ExpireIfNeed(key string) bool {
+func (d *TestDB) ExpireIfNeed(key []byte) bool {
 	return false
 }
 
-func (d *TestDB) GetExpire(key string) time.Duration {
+func (d *TestDB) GetExpire(key []byte) time.Duration {
 	return time.Duration(-1)
 }
 
-func (d *TestDB) SetExpire(key string, t time.Duration) {
+func (d *TestDB) SetExpire(key []byte, t time.Duration) {
 
 }
 
 type TestPubSub struct{}
 
-func (p *TestPubSub) NotifyKeyspaceEvent(t int, event string, key string, dbid int) {
+func (p *TestPubSub) NotifyKeyspaceEvent(t int, event string, key []byte, dbid int) {
 	if p == nil {
 	}
 }
 
 func NewCommand(fake redigo.Client, argv ...string) redigo.CommandArg {
-	return redigo.CommandArg{Argc: len(argv), Argv: argv, Client: fake}
+	argv_bytes := make([][]byte, len(argv))
+	for i, s := range argv {
+		argv_bytes[i] = []byte(s)
+	}
+	return redigo.CommandArg{Argc: len(argv), Argv: argv_bytes, Client: fake}
 }
 
 func NewFakeClient() *TestClient {
-	return &TestClient{RESPWriter: redigo.NewRESPWriter(), server: &TestServer{}, db: &TestDB{Dict: make(map[string]interface{})}}
+	return &TestClient{
+		RESPWriter: redigo.NewRESPWriter(&TextWriter{}),
+		server:     &TestServer{},
+		db:         &TestDB{Dict: make(map[string]interface{})},
+	}
 }
 
 func TestPING(t *testing.T) {

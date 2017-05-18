@@ -5,11 +5,10 @@ import (
 )
 
 func StringMatchPattern(pattern, str string, nocase bool) bool {
-	return MatchPattern([]rune(pattern), []rune(str), nocase)
+	return MatchPattern([]byte(pattern), []byte(str), nocase)
 }
 
-// Glob-style pattern matching.
-func MatchPattern(pattern, str []rune, nocase bool) bool {
+func MatchPattern(pattern, str []byte, nocase bool) bool {
 	var i, j int
 
 	plen := len(pattern)
@@ -59,9 +58,9 @@ func MatchPattern(pattern, str []rune, nocase bool) bool {
 						start, end = end, start
 					}
 					if nocase {
-						start = unicode.ToLower(start)
-						end = unicode.ToLower(end)
-						c = unicode.ToLower(c)
+						start = byte(unicode.ToLower(rune(start)))
+						end = byte(unicode.ToLower(rune(end)))
+						c = byte(unicode.ToLower(rune(c)))
 					}
 					i += 2
 					if c >= start && c <= end {
@@ -73,7 +72,7 @@ func MatchPattern(pattern, str []rune, nocase bool) bool {
 							match = true
 						}
 					} else {
-						if unicode.ToLower(pattern[i]) == unicode.ToLower(str[j]) {
+						if unicode.ToLower(rune(pattern[i])) == unicode.ToLower(rune(str[j])) {
 							match = true
 						}
 					}
@@ -97,7 +96,7 @@ func MatchPattern(pattern, str []rune, nocase bool) bool {
 					return false
 				}
 			} else {
-				if unicode.ToLower(pattern[i]) != unicode.ToLower(str[j]) {
+				if unicode.ToLower(rune(pattern[i])) != unicode.ToLower(rune(str[j])) {
 					return false
 				}
 			}

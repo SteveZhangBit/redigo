@@ -14,11 +14,10 @@ const (
 )
 
 type RESPWriter struct {
-	Text  string
-	Write func(x string)
+	Writer
 }
 
-func (r *RESPWriter) AddReply(x string) {
+func (r *RESPWriter) AddReply(x []byte) {
 	r.Write(x)
 }
 
@@ -28,69 +27,69 @@ func (r *RESPWriter) AddReplyInt64(x int64) {
 	} else if x == 1 {
 		r.AddReply(COne)
 	} else {
-		r.AddReply(fmt.Sprintf(":%d\r\n", x))
+		r.AddReply([]byte(fmt.Sprintf(":%d\r\n", x)))
 	}
 }
 
 func (r *RESPWriter) AddReplyFloat64(x float64) {
 	if math.IsInf(x, 0) {
 		if x > 0 {
-			r.AddReplyBulk("inf")
+			r.AddReplyBulk([]byte("inf"))
 		} else {
-			r.AddReplyBulk("-inf")
+			r.AddReplyBulk([]byte("-inf"))
 		}
 	} else {
 		s := fmt.Sprintf("%.17g", x)
-		r.AddReply(fmt.Sprintf("$%d\r\n%s\r\n", len(s), s))
+		r.AddReply([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(s), s)))
 	}
 }
 
 func (r *RESPWriter) AddReplyMultiBulkLen(x int) {
-	r.AddReply(fmt.Sprintf("*%d\r\n", x))
+	r.AddReply([]byte(fmt.Sprintf("*%d\r\n", x)))
 }
 
-func (r *RESPWriter) AddReplyBulk(x string) {
-	r.AddReply(fmt.Sprintf("$%d\r\n%s\r\n", len(x), x))
+func (r *RESPWriter) AddReplyBulk(x []byte) {
+	r.AddReply([]byte(fmt.Sprintf("$%d\r\n", len(x))))
+	r.AddReply(x)
+	r.AddReply(CRLF)
 }
 
 func (r *RESPWriter) AddReplyError(msg string) {
-	r.AddReply(fmt.Sprintf("-ERR %s\r\n", msg))
+	r.AddReply([]byte("-ERR "))
+	r.AddReply([]byte(msg))
+	r.AddReply(CRLF)
 }
 
 func (r *RESPWriter) AddReplyStatus(msg string) {
-	r.AddReply(fmt.Sprintf("+%s\r\n", msg))
+	r.AddReply([]byte("+"))
+	r.AddReply([]byte(msg))
+	r.AddReply(CRLF)
 }
 
-func NewRESPWriter() *RESPWriter {
-	wr := &RESPWriter{}
-	wr.Write = func(x string) {
-		wr.Text += x
-	}
-	return wr
+func NewRESPWriter(wr Writer) *RESPWriter {
+	return &RESPWriter{wr}
 }
 
-func NewRESPWriterFunc(f func(x string)) *RESPWriter {
-	return &RESPWriter{Write: f}
+type RESPReader struct {
+	//argv [][]byte
 }
 
-type RESPReader struct{}
-
-func splitInlineArgs(line []rune) ([]string, bool) {
+func splitInlineArgs(line []byte) ([][]byte, bool) {
 	length := len(line)
 
-	var argv []string
+	var argv [][]byte
 	var inq, insq bool
 	for i := 0; i < length; i++ {
 		// Skip space
-		for unicode.IsSpace(line[i]) {
+		for unicode.IsSpace(rune(line[i])) {
 			i++
 		}
 
-		var token []rune
+		var token []byte
 		for ; i < length; i++ {
 			if inq {
 				if line[i] == '\\' && i+1 < length {
-					var c rune
+					var c byte
 					i++
 					switch line[i] {
 					case 'n':
@@ -108,7 +107,7 @@ func splitInlineArgs(line []rune) ([]string, bool) {
 					}
 					token = append(token, c)
 				} else if line[i] == '"' {
-					if i+1 < length && !unicode.IsSpace(line[i+1]) {
+					if i+1 < length && !unicode.IsSpace(rune(line[i+1])) {
 						return nil, false
 					}
 					inq = false
@@ -121,7 +120,7 @@ func splitInlineArgs(line []rune) ([]string, bool) {
 					i++
 					token = append(token, '\'')
 				} else if line[i] == '\'' {
-					if i+1 < length && !unicode.IsSpace(line[i+1]) {
+					if i+1 < length && !unicode.IsSpace(rune(line[i+1])) {
 						return nil, false
 					}
 					insq = false
@@ -130,19 +129,19 @@ func splitInlineArgs(line []rune) ([]string, bool) {
 					token = append(token, line[i])
 				}
 			} else {
-				var c rune = line[i]
+				var c byte = line[i]
 				if c == '"' {
 					inq = true
 				} else if c == '\'' {
 					insq = true
-				} else if unicode.IsSpace(c) {
+				} else if unicode.IsSpace(rune(c)) {
 					break
 				} else {
 					token = append(token, c)
 				}
 			}
 		}
-		argv = append(argv, string(token))
+		argv = append(argv, token)
 	}
 
 	// Unterminated quotes
@@ -153,14 +152,14 @@ func splitInlineArgs(line []rune) ([]string, bool) {
 	return argv, true
 }
 
-func (r *RESPReader) ReadInlineCommand(line string) (arg CommandArg, err error) {
+func (r *RESPReader) ReadInlineCommand(line []byte) (arg CommandArg, err error) {
 	if len(line) > REDIS_INLINE_MAXSIZE {
 		err = errors.New("Protocol error: too big inline request")
 		return
 	}
 
 	// Split the input buffer
-	if argv, ok := splitInlineArgs([]rune(line)); !ok {
+	if argv, ok := splitInlineArgs(line); !ok {
 		err = errors.New("Protocol error: unbalanced quotes in request")
 	} else {
 		arg.Argc = len(argv)
@@ -170,10 +169,11 @@ func (r *RESPReader) ReadInlineCommand(line string) (arg CommandArg, err error) 
 }
 
 func (r *RESPReader) ReadMultiBulkCommand(scanner *bufio.Scanner) (arg CommandArg, err error) {
-	var line string
+	var line []byte
+	var argv [][]byte
 
 	// Read multi builk length
-	line = scanner.Text()
+	line = scanner.Bytes()
 	if len(line) > REDIS_INLINE_MAXSIZE {
 		err = errors.New("Protocol error: too big mbulk count string")
 		return
@@ -181,16 +181,17 @@ func (r *RESPReader) ReadMultiBulkCommand(scanner *bufio.Scanner) (arg CommandAr
 
 	// Find out the multi bulk length.
 	var mbulklen int
-	if x, e := strconv.ParseInt(line[1:], 10, 64); e != nil || x > 1024*1024 {
+	if x, e := strconv.Atoi(string(line[1:])); e != nil || x > 1024*1024 {
 		err = errors.New("Protocol error: invalid multibulk length")
 		return
 	} else {
-		mbulklen = int(x)
+		mbulklen = x
 	}
+	argv = make([][]byte, mbulklen)
 
-	var argv []string
-	for ; mbulklen > 0 && scanner.Scan(); mbulklen-- {
-		line = scanner.Text()
+	var i int
+	for i = 0; i < mbulklen && scanner.Scan(); i++ {
+		line = scanner.Bytes()
 		if len(line) > REDIS_INLINE_MAXSIZE {
 			err = errors.New("Protocol error: too big bulk count string")
 			return
@@ -201,7 +202,7 @@ func (r *RESPReader) ReadMultiBulkCommand(scanner *bufio.Scanner) (arg CommandAr
 			return
 		}
 
-		if bulklen, e := strconv.ParseInt(line[1:], 10, 64); e != nil || bulklen > 512*1024*1024 {
+		if bulklen, e := strconv.Atoi(string(line[1:])); e != nil || bulklen > 512*1024*1024 {
 			err = errors.New("Protocol error: invalid bulk length")
 			return
 		} else {
@@ -209,20 +210,20 @@ func (r *RESPReader) ReadMultiBulkCommand(scanner *bufio.Scanner) (arg CommandAr
 				err = errors.New("Protocol error: no bulk data")
 				return
 			}
-			line = scanner.Text()
-			if len(line) != int(bulklen) {
+			line = scanner.Bytes()
+			if len(line) != bulklen {
 				err = errors.New("Protocol error: bulk length doesn't match data length")
 				return
 			}
-			argv = append(argv, line)
+			argv[i] = line
 		}
 	}
-	if mbulklen != 0 {
+	if i != mbulklen {
 		err = errors.New("Protocol error: multibulk length doesn't match")
 		return
 	}
 
-	arg.Argc = len(argv)
+	arg.Argc = mbulklen
 	arg.Argv = argv
 	return
 }

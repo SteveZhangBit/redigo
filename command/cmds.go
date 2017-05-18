@@ -38,10 +38,6 @@ func TIMECommand(c redigo.CommandArg) {
 
 }
 
-func ADDREPLYCommand(c redigo.CommandArg) {
-
-}
-
 func COMMANDCommand(c redigo.CommandArg) {
 
 }

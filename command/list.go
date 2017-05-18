@@ -151,10 +151,10 @@ func LINDEXCommand(c redigo.CommandArg) {
 		return
 	}
 
-	if index, ok := GetInt64FromStringOrReply(c, c.Argv[2], ""); ok {
+	if index, ok := GetInt64FromStringOrReply(c, rstring.New(c.Argv[2]), ""); ok {
 		e := l.Index(int(index))
 		if e != nil {
-			c.AddReplyBulk(e.Value().String())
+			c.AddReplyBulk(e.Value().Bytes())
 		} else {
 			c.AddReply(redigo.NullBulk)
 		}
@@ -173,7 +173,7 @@ func LSETCommand(c redigo.CommandArg) {
 		return
 	}
 
-	if x, ok := GetInt64FromStringOrReply(c, c.Argv[2], ""); !ok {
+	if x, ok := GetInt64FromStringOrReply(c, rstring.New(c.Argv[2]), ""); !ok {
 		return
 	} else {
 		index = int(x)
@@ -214,7 +214,7 @@ func listPop(c redigo.CommandArg, where int) {
 	if e == nil {
 		c.AddReply(redigo.NullBulk)
 	} else {
-		c.AddReplyBulk(e.Value().String())
+		c.AddReplyBulk(e.Value().Bytes())
 		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_LIST, event, c.Argv[1], c.DB().GetID())
 		if l.Len() == 0 {
 			c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB().GetID())
@@ -237,9 +237,9 @@ func LRANGECommand(c redigo.CommandArg) {
 	var l rtype.List
 	var start, end, llen, rangelen int
 
-	if x, ok := GetInt64FromStringOrReply(c, c.Argv[2], ""); !ok {
+	if x, ok := GetInt64FromStringOrReply(c, rstring.New(c.Argv[2]), ""); !ok {
 		return
-	} else if y, ok := GetInt64FromStringOrReply(c, c.Argv[3], ""); !ok {
+	} else if y, ok := GetInt64FromStringOrReply(c, rstring.New(c.Argv[3]), ""); !ok {
 		return
 	} else {
 		start = int(x)
@@ -250,7 +250,7 @@ func LRANGECommand(c redigo.CommandArg) {
 	if o := c.LookupKeyReadOrReply(c.Argv[1], redigo.EmptyMultiBulk); o == nil {
 		return
 	} else if l, ok = o.(rtype.List); !ok {
-		c.AddReplyError(redigo.WrongTypeErr)
+		c.AddReplyError(string(redigo.WrongTypeErr))
 		return
 	}
 	llen = l.Len()
@@ -287,7 +287,7 @@ func LRANGECommand(c redigo.CommandArg) {
 	}
 	e := l.Index(start)
 	for rangelen > 0 {
-		c.AddReplyBulk(e.Value().String())
+		c.AddReplyBulk(e.Value().Bytes())
 		e = e.Next()
 		rangelen--
 	}
@@ -297,9 +297,9 @@ func LTRIMCommand(c redigo.CommandArg) {
 	var l rtype.List
 	var start, end, llen int
 
-	if x, ok := GetInt64FromStringOrReply(c, c.Argv[2], ""); !ok {
+	if x, ok := GetInt64FromStringOrReply(c, rstring.New(c.Argv[2]), ""); !ok {
 		return
-	} else if y, ok := GetInt64FromStringOrReply(c, c.Argv[3], ""); !ok {
+	} else if y, ok := GetInt64FromStringOrReply(c, rstring.New(c.Argv[3]), ""); !ok {
 		return
 	} else {
 		start = int(x)
@@ -370,7 +370,7 @@ func LREMCommand(c redigo.CommandArg) {
 	var l rtype.List
 	var toremove int
 
-	if x, ok := GetInt64FromStringOrReply(c, c.Argv[2], ""); !ok {
+	if x, ok := GetInt64FromStringOrReply(c, rstring.New(c.Argv[2]), ""); !ok {
 		return
 	} else {
 		toremove = int(x)
@@ -447,7 +447,7 @@ func RPOPLPUSHCommand(c redigo.CommandArg) {
  *   to the number of elements we have in the ready list.
  */
 
-func GetTimeoutFromStringOrReply(c redigo.CommandArg, o string, unit time.Duration) (t time.Duration, ok bool) {
+func GetTimeoutFromStringOrReply(c redigo.CommandArg, o rtype.String, unit time.Duration) (t time.Duration, ok bool) {
 	var x int64
 
 	if x, ok = GetInt64FromStringOrReply(c, o, "timeout is not an integer or out of range"); !ok {
@@ -469,7 +469,7 @@ func listBlockingPop(c redigo.CommandArg, where int) {
 	var timeout time.Duration
 	var ok bool
 
-	if timeout, ok = GetTimeoutFromStringOrReply(c, c.Argv[c.Argc-1], time.Second); !ok {
+	if timeout, ok = GetTimeoutFromStringOrReply(c, rstring.New(c.Argv[c.Argc-1]), time.Second); !ok {
 		return
 	}
 
@@ -493,7 +493,7 @@ func listBlockingPop(c redigo.CommandArg, where int) {
 
 				c.AddReplyMultiBulkLen(2)
 				c.AddReplyBulk(c.Argv[i])
-				c.AddReplyBulk(val.String())
+				c.AddReplyBulk(val.Bytes())
 				c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_LIST, event, c.Argv[i], c.DB().GetID())
 
 				if l.Len() == 0 {

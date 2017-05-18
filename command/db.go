@@ -3,6 +3,8 @@ package command
 import (
 	"github.com/SteveZhangBit/redigo"
 	"github.com/SteveZhangBit/redigo/rtype"
+	"bytes"
+	"github.com/SteveZhangBit/redigo/rtype/rstring"
 )
 
 /*-----------------------------------------------------------------------------
@@ -46,7 +48,7 @@ func EXISTSCommand(c redigo.CommandArg) {
 
 func SELECTCommand(c redigo.CommandArg) {
 	var id int
-	if x, ok := GetInt64FromStringOrReply(c, c.Argv[1], "invalid DB index"); !ok {
+	if x, ok := GetInt64FromStringOrReply(c, rstring.New(c.Argv[1]), "invalid DB index"); !ok {
 		return
 	} else {
 		id = int(x)
@@ -60,7 +62,7 @@ func SELECTCommand(c redigo.CommandArg) {
 }
 
 func RANDOMKEYCommand(c redigo.CommandArg) {
-	if key := c.DB().RandomKey(); key == "" {
+	if key := c.DB().RandomKey(); len(key) == 0 {
 		c.AddReply(redigo.NullBulk)
 	} else {
 		c.AddReplyBulk(key)
@@ -68,13 +70,14 @@ func RANDOMKEYCommand(c redigo.CommandArg) {
 }
 
 func KEYSCommand(c redigo.CommandArg) {
-	var keys []string
+	var keys [][]byte
 
 	pattern := c.Argv[1]
 	isAllKeys := len(pattern) == 1 && pattern[0] == '*'
 	for key := range c.DB().GetDict() {
-		if isAllKeys || redigo.StringMatchPattern(pattern, key, false) {
-			keys = append(keys, key)
+		key_bytes := []byte(key)
+		if isAllKeys || redigo.MatchPattern(pattern, key_bytes, false) {
+			keys = append(keys, key_bytes)
 		}
 	}
 	c.AddReplyMultiBulkLen(len(keys))
@@ -122,7 +125,7 @@ func renameGeneric(c redigo.CommandArg, nx bool) {
 	var o interface{}
 
 	// To use the same key as src and dst is probably an error
-	if c.Argv[1] == c.Argv[2] {
+	if bytes.Equal(c.Argv[1], c.Argv[2]) {
 		c.AddReply(redigo.SameObjectErr)
 		return
 	}

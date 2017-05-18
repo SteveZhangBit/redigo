@@ -118,7 +118,7 @@ func SPOPCommand(c redigo.CommandArg) {
 
 	// TODO: Replicate/AOF this command as an SREM operation
 
-	c.AddReplyBulk(e.String())
+	c.AddReplyBulk(e.Bytes())
 	if s.Size() == 0 {
 		c.DB().Delete(c.Argv[1])
 		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB().GetID())

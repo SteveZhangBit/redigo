@@ -8,22 +8,22 @@ import (
 	"github.com/SteveZhangBit/redigo/rtype"
 )
 
-type NormString string
+type BytesString []byte
 
-func (n NormString) String() string {
+func (n BytesString) String() string {
 	return string(n)
 }
 
-func (n NormString) Bytes() []byte {
-	return []byte(n)
+func (n BytesString) Bytes() []byte {
+	return n
 }
 
-func (n NormString) Len() int64 {
+func (n BytesString) Len() int64 {
 	return int64(len(n))
 }
 
-func (n NormString) Append(b string) rtype.String {
-	return NormString(append([]byte(n), []byte(b)...))
+func (n BytesString) Append(b []byte) rtype.String {
+	return BytesString(append(n, b...))
 }
 
 type IntString int64
@@ -33,7 +33,7 @@ func (i IntString) String() string {
 }
 
 func (i IntString) Bytes() []byte {
-	return []byte(strconv.FormatInt(int64(i), 10))
+	return []byte(i.String())
 }
 
 func (i IntString) Len() int64 {
@@ -45,18 +45,18 @@ func (i IntString) Len() int64 {
 	return count
 }
 
-func (i IntString) Append(b string) rtype.String {
-	return NormString(append([]byte(strconv.FormatInt(int64(i), 10)), []byte(b)...))
+func (i IntString) Append(b []byte) rtype.String {
+	return BytesString(append(i.Bytes(), b...))
 }
 
-func New(val string) rtype.String {
+func New(val []byte) rtype.String {
 	// Check whether can be convert to integer
 	if val[0] == '+' || val[0] == '-' || (val[0] >= '0' && val[0] <= '9') {
-		if x, err := strconv.ParseInt(val, 10, 64); err == nil {
+		if x, err := strconv.ParseInt(string(val), 10, 64); err == nil {
 			return IntString(x)
 		}
 	}
-	return NormString(val)
+	return BytesString(val)
 }
 
 func NewFromInt64(val int64) rtype.String {
@@ -64,7 +64,7 @@ func NewFromInt64(val int64) rtype.String {
 }
 
 func NewFromFloat64(val float64) rtype.String {
-	return NormString(fmt.Sprintf("%.17g", val))
+	return BytesString(fmt.Sprintf("%.17g", val))
 }
 
 func CompareStringObjects(a, b rtype.String) int {

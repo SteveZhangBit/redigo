@@ -10,14 +10,21 @@ const (
 	REDIS_LIST_HEAD = 1
 )
 
+type String interface {
+	String() string
+	Bytes() []byte
+	Len() int64
+	Append(b []byte) String
+}
+
 type HashMap interface {
 	/* Add an element, discard the old if the key already exists.
 	 * Return false on insert and true on update. */
-	Set(key string, v String) bool
-	Get(key string) (String, bool)
-	Delete(key string)
+	Set(key []byte, v String) bool
+	Get(key []byte) (String, bool)
+	Delete(key []byte)
 	Len() int
-	Iterate(iterf func(key string, v String))
+	Iterate(iterf func(key []byte, v String))
 }
 
 type List interface {
@@ -46,13 +53,6 @@ type ListElement interface {
 	Next() ListElement
 	Value() String
 	SetValue(v String)
-}
-
-type String interface {
-	String() string
-	Bytes() []byte
-	Len() int64
-	Append(b string) String
 }
 
 type Set interface {

@@ -34,7 +34,7 @@ func TestLINSERT(t *testing.T) {
 	fake := NewFakeClient()
 
 	LPUSHCommand(NewCommand(fake, "lpush", "foo", "a"))
-	fake.Text = ""
+	fake.Flush()
 
 	LINSERTCommand(NewCommand(fake, "linsert", "foo", "after", "a", "c"))
 	if fake.CompareInt64(t, 2) {
@@ -56,14 +56,14 @@ func TestLLEN(t *testing.T) {
 	fake := NewFakeClient()
 
 	LPUSHCommand(NewCommand(fake, "lpush", "foo", "a", "b"))
-	fake.Text = ""
+	fake.Flush()
 	LLENCommand(NewCommand(fake, "llen", "foo"))
 	if fake.CompareInt64(t, 2) {
 		t.Error("llen: when lpush 2 elements to foo")
 	}
 
 	RPOPCommand(NewCommand(fake, "rpop", "foo"))
-	fake.Text = ""
+	fake.Flush()
 	LLENCommand(NewCommand(fake, "llen", "foo"))
 	if fake.CompareInt64(t, 1) {
 		t.Error("llen: when rpop from foo")
@@ -75,7 +75,7 @@ func TestLINDEX(t *testing.T) {
 
 	RPUSHCommand(NewCommand(fake, "rpush", "foo", "a", "b"))
 	LINSERTCommand(NewCommand(fake, "linsert", "foo", "after", "b", "c"))
-	fake.Text = ""
+	fake.Flush()
 	LINDEXCommand(NewCommand(fake, "lindex", "foo", "2"))
 	if fake.CompareBulk(t, "c") {
 		t.Error("lindex: when rpush a b and linsert c after b")
@@ -101,7 +101,7 @@ func TestLSET(t *testing.T) {
 	}
 
 	RPUSHCommand(NewCommand(fake, "rpush", "foo", "a", "b", "c"))
-	fake.Text = ""
+	fake.Flush()
 	LSETCommand(NewCommand(fake, "lset", "foo", "2", "d"))
 	if fake.CompareText(t, redigo.OK) {
 		t.Error("lset: when set foo[2] to d")
@@ -122,7 +122,7 @@ func TestPOP(t *testing.T) {
 	}
 
 	RPUSHCommand(NewCommand(fake, "rpush", "foo", "a", "b", "c"))
-	fake.Text = ""
+	fake.Flush()
 	LPOPCommand(NewCommand(fake, "lpop", "foo"))
 	if fake.CompareBulk(t, "a") {
 		t.Error("lpop: when foo has a b c")
@@ -133,7 +133,7 @@ func TestPOP(t *testing.T) {
 	}
 
 	RPOPCommand(NewCommand(fake, "rpop", "foo"))
-	fake.Text = ""
+	fake.Flush()
 	LPOPCommand(NewCommand(fake, "lpop", "foo"))
 	if fake.CompareText(t, redigo.NullBulk) {
 		t.Error("lpop: when foo is empty")
@@ -145,7 +145,7 @@ func TestLTRIM(t *testing.T) {
 
 	RPUSHCommand(NewCommand(fake, "rpush", "foo", "a", "b", "c", "d"))
 	LTRIMCommand(NewCommand(fake, "ltrim", "foo", "0", "2"))
-	fake.Text = ""
+	fake.Flush()
 	LLENCommand(NewCommand(fake, "llen", "foo"))
 	if fake.CompareInt64(t, 3) {
 		t.Error("ltrim: ltrim 0 2 when foo is abcd")
@@ -157,7 +157,7 @@ func TestLTRIM(t *testing.T) {
 
 	RPUSHCommand(NewCommand(fake, "rpush", "foo", "d"))
 	LTRIMCommand(NewCommand(fake, "ltrim", "foo", "1", "-2"))
-	fake.Text = ""
+	fake.Flush()
 	LLENCommand(NewCommand(fake, "llen", "foo"))
 	if fake.CompareInt64(t, 2) {
 		t.Error("ltrim: ltrim 1 -2 when foo is abcd")
@@ -170,7 +170,7 @@ func TestLTRIM(t *testing.T) {
 	RPUSHCommand(NewCommand(fake, "rpush", "foo", "d"))
 	LPUSHCommand(NewCommand(fake, "lpush", "foo", "a"))
 	LTRIMCommand(NewCommand(fake, "ltrim", "foo", "2", "-2"))
-	fake.Text = ""
+	fake.Flush()
 	LLENCommand(NewCommand(fake, "llen", "foo"))
 	if fake.CompareInt64(t, 1) {
 		t.Error("ltrim: ltrim 2 -2 when foo is abcd")
@@ -183,7 +183,7 @@ func TestLTRIM(t *testing.T) {
 	RPUSHCommand(NewCommand(fake, "rpush", "foo", "d"))
 	LPUSHCommand(NewCommand(fake, "lpush", "foo", "a", "b"))
 	LTRIMCommand(NewCommand(fake, "ltrim", "foo", "5", "0"))
-	fake.Text = ""
+	fake.Flush()
 	LLENCommand(NewCommand(fake, "llen", "foo"))
 	if fake.CompareText(t, redigo.CZero) {
 		t.Error("ltrim: ltrim 5 0 when foo is abcd")
@@ -198,7 +198,7 @@ func TestLREM(t *testing.T) {
 	fake := NewFakeClient()
 
 	RPUSHCommand(NewCommand(fake, "rpush", "foo", "a", "b", "a", "c", "c", "e", "c"))
-	fake.Text = ""
+	fake.Flush()
 	LREMCommand(NewCommand(fake, "lrem", "foo", "2", "a"))
 	if fake.CompareInt64(t, 2) {
 		t.Error("lrem: lrem 2 a when foo is abaccec")
@@ -227,7 +227,7 @@ func TestLRANGE(t *testing.T) {
 	fake := NewFakeClient()
 
 	RPUSHCommand(NewCommand(fake, "rpush", "foo", "a", "b", "c", "d", "e", "f"))
-	fake.Text = ""
+	fake.Flush()
 	LRANGECommand(NewCommand(fake, "lrange", "foo", "1", "3"))
 	if fake.CompareMultiBulk(t, "b", "c", "d") {
 		t.Error("lrange: range between 1 3 and foo is abcdef")

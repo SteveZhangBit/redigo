@@ -1,6 +1,8 @@
 package command
 
 import (
+	"bytes"
+
 	"github.com/SteveZhangBit/redigo"
 	"github.com/SteveZhangBit/redigo/rtype"
 	"github.com/SteveZhangBit/redigo/rtype/rstring"
@@ -29,7 +31,7 @@ func ZADDCommand(c redigo.CommandArg) {
 	 * either execute fully or nothing at all. */
 	scores := make([]float64, elements)
 	for i := 0; i < elements; i++ {
-		if x, ok := GetFloat64FromStringOrReply(c, c.Argv[scoreidx+i*2], ""); !ok {
+		if x, ok := GetFloat64FromStringOrReply(c, rstring.New(c.Argv[scoreidx+i*2]), ""); !ok {
 			return
 		} else {
 			scores[i] = x
@@ -142,17 +144,17 @@ func zrange(c redigo.CommandArg, reverse bool) {
 	var start, end int
 	var withscores bool
 
-	if x, ok := GetInt64FromStringOrReply(c, c.Argv[2], ""); !ok {
+	if x, ok := GetInt64FromStringOrReply(c, rstring.New(c.Argv[2]), ""); !ok {
 		return
 	} else {
-		if y, ok := GetInt64FromStringOrReply(c, c.Argv[3], ""); !ok {
+		if y, ok := GetInt64FromStringOrReply(c, rstring.New(c.Argv[3]), ""); !ok {
 			return
 		} else {
 			start, end = int(x), int(y)
 		}
 	}
 
-	if c.Argc == 5 && c.Argv[4] == "withscores" {
+	if c.Argc == 5 && bytes.Equal(c.Argv[4], []byte("withscores")) {
 		withscores = true
 	} else if c.Argc >= 5 {
 		c.AddReply(redigo.WrongTypeErr)
@@ -211,7 +213,7 @@ func zrange(c redigo.CommandArg, reverse bool) {
 	}
 
 	for ; rangelen > 0; rangelen-- {
-		c.AddReplyBulk(ln.Value().String())
+		c.AddReplyBulk(ln.Value().Bytes())
 		if withscores {
 			c.AddReplyFloat64(ln.Score())
 		}

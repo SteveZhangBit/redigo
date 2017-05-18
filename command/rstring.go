@@ -10,18 +10,12 @@ import (
 	"github.com/SteveZhangBit/redigo/rtype/rstring"
 )
 
-func GetInt64FromStringOrReply(c redigo.CommandArg, o interface{}, msg string) (x int64, ok bool) {
+func GetInt64FromStringOrReply(c redigo.CommandArg, o rtype.String, msg string) (x int64, ok bool) {
 	switch str := o.(type) {
 	case nil:
 		return 0, true
 	case rstring.IntString:
 		x, ok = int64(str), true
-	case string:
-		if i, err := strconv.ParseInt(str, 10, 64); err != nil {
-			ok = false
-		} else {
-			x, ok = i, true
-		}
 	default:
 		ok = false
 	}
@@ -35,20 +29,14 @@ func GetInt64FromStringOrReply(c redigo.CommandArg, o interface{}, msg string) (
 	return
 }
 
-func GetFloat64FromStringOrReply(c redigo.CommandArg, o interface{}, msg string) (x float64, ok bool) {
+func GetFloat64FromStringOrReply(c redigo.CommandArg, o rtype.String, msg string) (x float64, ok bool) {
 	switch str := o.(type) {
 	case nil:
 		return 0.0, true
 	case rstring.IntString:
 		x, ok = float64(str), true
-	case rstring.NormString:
+	case rstring.BytesString:
 		if i, err := strconv.ParseFloat(string(str), 64); err != nil {
-			ok = false
-		} else {
-			x, ok = i, true
-		}
-	case string:
-		if i, err := strconv.ParseFloat(str, 64); err != nil {
 			ok = false
 		} else {
 			x, ok = i, true
@@ -91,10 +79,10 @@ const (
  * XX -- Only set the key if it already exist.
  *
  * TODO: Currently, we only implement the very basic function of SET command. */
-func rstringSet(c redigo.CommandArg, flags int, okReply, abortReply string) {
+func rstringSet(c redigo.CommandArg, flags int, okReply, abortReply []byte) {
 	if (flags&REDIS_SET_NX > 0 && c.DB().LookupKeyWrite(c.Argv[1]) != nil) ||
 		(flags&REDIS_SET_XX > 0 && c.DB().LookupKeyWrite(c.Argv[1]) == nil) {
-		if abortReply != "" {
+		if len(abortReply) != 0 {
 			c.AddReply(abortReply)
 		} else {
 			c.AddReply(redigo.NullBulk)
@@ -105,7 +93,7 @@ func rstringSet(c redigo.CommandArg, flags int, okReply, abortReply string) {
 	c.DB().SetKeyPersist(c.Argv[1], rstring.New(c.Argv[2]))
 	c.Server().AddDirty(1)
 	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_STRING, "set", c.Argv[1], c.DB().GetID())
-	if okReply != "" {
+	if len(okReply) != 0 {
 		c.AddReply(okReply)
 	} else {
 		c.AddReply(redigo.OK)
@@ -116,7 +104,7 @@ func SETCommand(c redigo.CommandArg) {
 	flags := REDIS_SET_NO_FLAGS
 
 	for j := 3; j < c.Argc; j++ {
-		a := strings.ToLower(c.Argv[j])
+		a := strings.ToLower(string(c.Argv[j]))
 
 		// var next string
 		// if j < c.Argc-1 {
@@ -133,7 +121,7 @@ func SETCommand(c redigo.CommandArg) {
 		}
 	}
 
-	rstringSet(c, flags, "", "")
+	rstringSet(c, flags, nil, nil)
 }
 
 func SETNXCommand(c redigo.CommandArg) {
@@ -155,7 +143,7 @@ func rstringGet(c redigo.CommandArg) bool {
 		c.AddReply(redigo.WrongTypeErr)
 		return false
 	} else {
-		c.AddReplyBulk(str.String())
+		c.AddReplyBulk(str.Bytes())
 		return true
 	}
 }
@@ -195,15 +183,16 @@ func MSETNXCommand(c redigo.CommandArg) {
 func INCRBYFLOATCommand(c redigo.CommandArg) {
 	var str rtype.String
 
+	var ok bool
 	o := c.DB().LookupKeyWrite(c.Argv[1])
-	if _, ok := o.(rtype.String); o != nil && !ok {
+	if str, ok = o.(rtype.String); o != nil && !ok {
 		c.AddReply(redigo.WrongTypeErr)
 		return
 	}
 
-	if x, ok := GetFloat64FromStringOrReply(c, o, ""); !ok {
+	if x, ok := GetFloat64FromStringOrReply(c, str, ""); !ok {
 		return
-	} else if incr, ok := GetFloat64FromStringOrReply(c, c.Argv[2], ""); !ok {
+	} else if incr, ok := GetFloat64FromStringOrReply(c, rstring.New(c.Argv[2]), ""); !ok {
 		return
 	} else {
 		x += incr
@@ -222,7 +211,7 @@ func INCRBYFLOATCommand(c redigo.CommandArg) {
 		c.DB().SignalModifyKey(c.Argv[1])
 		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_STRING, "incrbyfloat", c.Argv[1], c.DB().GetID())
 		c.Server().AddDirty(1)
-		c.AddReplyBulk(str.String())
+		c.AddReplyBulk(str.Bytes())
 
 		/* TODO: Always replicate INCRBYFLOAT as a SET command with the final value
 		 * in order to make sure that differences in float precision or formatting
@@ -233,15 +222,16 @@ func INCRBYFLOATCommand(c redigo.CommandArg) {
 func rstringIncrDecr(c redigo.CommandArg, incr int64) {
 	var str rtype.String
 
+	var ok bool
 	o := c.DB().LookupKeyWrite(c.Argv[1])
-	if _, ok := o.(rtype.String); o != nil && !ok {
+	if str, ok = o.(rtype.String); o != nil && !ok {
 		c.AddReply(redigo.WrongTypeErr)
 		return
 	}
 
 	// When the key value does not exist, this function will still work.
 	// It will produce a new 0 + incr value and set it to db.
-	if x, ok := GetInt64FromStringOrReply(c, o, ""); ok {
+	if x, ok := GetInt64FromStringOrReply(c, str, ""); ok {
 		if (incr < 0 && x < 0 && incr < math.MinInt64-x) ||
 			(incr > 0 && x > 0 && incr > math.MaxInt64-x) {
 			c.AddReplyError("increment or decrement would overflow")
@@ -261,7 +251,7 @@ func rstringIncrDecr(c redigo.CommandArg, incr int64) {
 		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_STRING, "incrby", c.Argv[1], c.DB().GetID())
 		c.Server().AddDirty(1)
 		c.AddReply(redigo.Colon)
-		c.AddReply(str.String())
+		c.AddReply(str.Bytes())
 		c.AddReply(redigo.CRLF)
 	}
 }
@@ -275,13 +265,13 @@ func DECRCommand(c redigo.CommandArg) {
 }
 
 func INCRBYCommand(c redigo.CommandArg) {
-	if incr, ok := GetInt64FromStringOrReply(c, c.Argv[2], ""); ok {
+	if incr, ok := GetInt64FromStringOrReply(c, rstring.New(c.Argv[2]), ""); ok {
 		rstringIncrDecr(c, incr)
 	}
 }
 
 func DECRBYCommand(c redigo.CommandArg) {
-	if incr, ok := GetInt64FromStringOrReply(c, c.Argv[2], ""); ok {
+	if incr, ok := GetInt64FromStringOrReply(c,rstring.New(c.Argv[2]), ""); ok {
 		rstringIncrDecr(c, -incr)
 	}
 }

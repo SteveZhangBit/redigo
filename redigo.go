@@ -9,23 +9,22 @@ const (
 	Version = "0.0.1"
 )
 
-const (
-	CRLF           = "\r\n"
-	OK             = "+OK\r\n"
-	Err            = "-ERR\r\n"
-	CZero          = ":0\r\n"
-	COne           = ":1\r\n"
-	CNegOne        = ":-1\r\n"
-	NullBulk       = "$-1\r\n"
-	NullMultiBulk  = "*-1\r\n"
-	EmptyMultiBulk = "*0\r\n"
-	Pong           = "+PONG\r\n"
-	WrongTypeErr   = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n"
-	Colon          = ":"
-	SyntaxErr      = "-ERR syntax error\r\n"
-	NoKeyErr       = "-ERR no such key\r\n"
-	OutOfRangeErr  = "-ERR index out of range\r\n"
-	SameObjectErr  = "-ERR source and destination objects are the same\r\n"
+var (
+	CRLF           = []byte("\r\n")
+	OK             = []byte("+OK\r\n")
+	CZero          = []byte(":0\r\n")
+	COne           = []byte(":1\r\n")
+	CNegOne        = []byte(":-1\r\n")
+	NullBulk       = []byte("$-1\r\n")
+	NullMultiBulk  = []byte("*-1\r\n")
+	EmptyMultiBulk = []byte("*0\r\n")
+	Pong           = []byte("+PONG\r\n")
+	WrongTypeErr   = []byte("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n")
+	Colon          = []byte(":")
+	SyntaxErr      = []byte("-ERR syntax error\r\n")
+	NoKeyErr       = []byte("-ERR no such key\r\n")
+	OutOfRangeErr  = []byte("-ERR index out of range\r\n")
+	SameObjectErr  = []byte("-ERR source and destination objects are the same\r\n")
 )
 
 const (
@@ -49,24 +48,29 @@ type Client interface {
 	Server() Server
 	SelectDB(id int) bool
 
-	LookupKeyReadOrReply(key string, reply string) interface{}
-	LookupKeyWriteOrReply(key string, reply string) interface{}
+	LookupKeyReadOrReply(key []byte, reply []byte) interface{}
+	LookupKeyWriteOrReply(key []byte, reply []byte) interface{}
 
-	BlockForKeys(keys []string, timeout time.Duration)
+	BlockForKeys(keys [][]byte, timeout time.Duration)
+}
+
+type Writer interface {
+	Write(b []byte)
+	Flush()
 }
 
 type ProtocolWriter interface {
-	AddReply(x string)
+	AddReply(x []byte)
 	AddReplyInt64(x int64)
 	AddReplyFloat64(x float64)
 	AddReplyMultiBulkLen(x int)
-	AddReplyBulk(x string)
+	AddReplyBulk(x []byte)
 	AddReplyError(msg string)
 	AddReplyStatus(msg string)
 }
 
 type ProtocolReader interface {
-	ReadInlineCommand(line string) (CommandArg, error)
+	ReadInlineCommand(line []byte) (CommandArg, error)
 	ReadMultiBulkCommand(scanner *bufio.Scanner) (CommandArg, error)
 }
 
@@ -82,30 +86,30 @@ type DB interface {
 	GetID() int
 	GetDict() map[string]interface{}
 
-	LookupKey(key string) interface{}
-	LookupKeyRead(key string) interface{}
-	LookupKeyWrite(key string) interface{}
+	LookupKey(key []byte) interface{}
+	LookupKeyRead(key []byte) interface{}
+	LookupKeyWrite(key []byte) interface{}
 
-	Add(key string, val interface{})
-	Update(key string, val interface{})
-	Delete(key string) (ok bool)
-	SetKeyPersist(key string, val interface{})
-	Exists(key string) (ok bool)
-	RandomKey() (key string)
+	Add(key []byte, val interface{})
+	Update(key []byte, val interface{})
+	Delete(key []byte) (ok bool)
+	SetKeyPersist(key []byte, val interface{})
+	Exists(key []byte) (ok bool)
+	RandomKey() (key []byte)
 
-	SignalModifyKey(key string)
+	SignalModifyKey(key []byte)
 
-	ExpireIfNeed(key string) bool
-	GetExpire(key string) time.Duration
-	SetExpire(key string, t time.Duration)
+	ExpireIfNeed(key []byte) bool
+	GetExpire(key []byte) time.Duration
+	SetExpire(key []byte, t time.Duration)
 }
 
 type PubSub interface {
-	NotifyKeyspaceEvent(t int, event string, key string, dbid int)
+	NotifyKeyspaceEvent(t int, event string, key []byte, dbid int)
 }
 
 type CommandArg struct {
 	Client
-	Argv []string
+	Argv [][]byte
 	Argc int
 }

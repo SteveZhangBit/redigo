@@ -13,19 +13,20 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-type HashSet map[rtype.String]struct{}
+type HashSet map[string]struct{}
 
 func (h HashSet) Add(val rtype.String) bool {
-	if _, ok := h[val]; !ok {
-		h[val] = struct{}{}
+	key := val.String()
+	if _, ok := h[key]; !ok {
+		h[key] = struct{}{}
 		return true
 	}
 	return false
 }
 
 func (h HashSet) Remove(val rtype.String) bool {
-	if _, ok := h[val]; ok {
-		delete(h, val)
+	if _, ok := h[val.String()]; ok {
+		delete(h, val.String())
 		return true
 	}
 	return false
@@ -36,12 +37,12 @@ func (h HashSet) Size() int {
 }
 
 func (h HashSet) IsMember(val rtype.String) bool {
-	_, ok := h[val]
+	_, ok := h[val.String()]
 	return ok
 }
 
 func (h HashSet) RandomElement() rtype.String {
-	var val rtype.String
+	var val string
 	count, i := rand.Intn(h.Size()), 0
 	for val = range h {
 		if i < count {
@@ -50,7 +51,7 @@ func (h HashSet) RandomElement() rtype.String {
 			break
 		}
 	}
-	return val
+	return rstring.New([]byte(val))
 }
 
 type IntsetSet struct {
@@ -80,7 +81,7 @@ func (i *IntsetSet) RandomElement() rtype.String {
 func (i *IntsetSet) Convert() HashSet {
 	hs := make(HashSet)
 	for j := 0; j < i.Size(); j++ {
-		hs[rstring.NewFromInt64(i.s.Get(j))] = struct{}{}
+		hs[rstring.NewFromInt64(i.s.Get(j)).String()] = struct{}{}
 	}
 	return hs
 }
@@ -88,7 +89,7 @@ func (i *IntsetSet) Convert() HashSet {
 func New(val rtype.String) rtype.Set {
 	var s rtype.Set
 	switch val.(type) {
-	case rstring.NormString:
+	case rstring.BytesString:
 		s = make(HashSet)
 	case rstring.IntString:
 		s = &IntsetSet{s: intset.New()}

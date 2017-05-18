@@ -47,12 +47,12 @@ func (z *ZSetSkiplistItem) Score() float64 {
 
 type ZSetSkiplist struct {
 	zsl  *zskiplist.ZSkiplist
-	dict map[rtype.String]float64
+	dict map[string]float64
 }
 
 func (z *ZSetSkiplist) Add(score float64, v rtype.String) bool {
 	if z.zsl.Insert(score, v) != nil {
-		z.dict[v] = score
+		z.dict[v.String()] = score
 		return true
 	}
 	return false
@@ -60,20 +60,20 @@ func (z *ZSetSkiplist) Add(score float64, v rtype.String) bool {
 
 func (z *ZSetSkiplist) Update(score float64, v rtype.String) bool {
 	if z.zsl.Delete(score, v) && z.zsl.Insert(score, v) != nil {
-		z.dict[v] = score
+		z.dict[v.String()] = score
 		return true
 	}
 	return false
 }
 
 func (z *ZSetSkiplist) Get(v rtype.String) (float64, bool) {
-	score, ok := z.dict[v]
+	score, ok := z.dict[v.String()]
 	return score, ok
 }
 
 func (z *ZSetSkiplist) Delete(score float64, v rtype.String) bool {
 	if z.zsl.Delete(score, v) {
-		delete(z.dict, v)
+		delete(z.dict, v.String())
 		return true
 	}
 	return false
@@ -109,5 +109,5 @@ func (z *ZSetSkiplist) GetRank(score float64, v rtype.String) uint {
 }
 
 func New() rtype.ZSet {
-	return &ZSetSkiplist{zsl: zskiplist.New(), dict: make(map[rtype.String]float64)}
+	return &ZSetSkiplist{zsl: zskiplist.New(), dict: make(map[string]float64)}
 }

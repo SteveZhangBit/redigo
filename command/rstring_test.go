@@ -51,7 +51,7 @@ func TestGET(t *testing.T) {
 	}
 
 	SETCommand(NewCommand(fake, "set", "foo", "bar"))
-	fake.Text = ""
+	fake.Flush()
 	GETCommand(cmd)
 	if fake.CompareBulk(t, "bar") {
 		t.Error("get:")
@@ -84,14 +84,14 @@ func TestINCRBYFLOAT(t *testing.T) {
 	}
 
 	SETCommand(NewCommand(fake, "set", "foo", "bar"))
-	fake.Text = ""
+	fake.Flush()
 	INCRBYFLOATCommand(NewCommand(fake, "incrbyfloat", "foo", "0.5"))
 	if fake.CompareErr(t, "value is not a valid float") {
 		t.Error("incrbyfloat: when bar is not a float")
 	}
 
 	SETCommand(NewCommand(fake, "set", "foo", "0.5"))
-	fake.Text = ""
+	fake.Flush()
 	INCRBYFLOATCommand(NewCommand(fake, "incrbyfloat", "foo", "bar"))
 	if fake.CompareErr(t, "value is not a valid float") {
 		t.Error("incrbyfloat: when c.Argv[2] is not a float")
@@ -127,7 +127,7 @@ func TestINCR(t *testing.T) {
 	}
 
 	SETCommand(NewCommand(fake, "set", "foo", "bar"))
-	fake.Text = ""
+	fake.Flush()
 	INCRCommand(NewCommand(fake, "incr", "foo"))
 	if fake.CompareErr(t, "value is not an integer or out of range") {
 		t.Error("incr: when foo is not an integer")
@@ -165,7 +165,7 @@ func TestSTRLEN(t *testing.T) {
 	}
 
 	SETCommand(NewCommand(fake, "set", "foo", "bar"))
-	fake.Text = ""
+	fake.Flush()
 	STRLENCommand(NewCommand(fake, "strlen", "foo"))
 	if fake.CompareInt64(t, 3) {
 		t.Error("strlen: when foo exists")

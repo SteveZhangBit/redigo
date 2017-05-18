@@ -30,7 +30,7 @@ func TestZREM(t *testing.T) {
 	fake := NewFakeClient()
 
 	ZADDCommand(NewCommand(fake, "zadd", "z", "1", "a", "1", "b"))
-	fake.Text = ""
+	fake.Flush()
 	ZREMCommand(NewCommand(fake, "zrem", "z", "a"))
 	if fake.CompareInt64(t, 1) {
 		t.Error("zrem: failed to remove a when z has 1-a and 1-b")
@@ -46,7 +46,7 @@ func TestZRANGE(t *testing.T) {
 	fake := NewFakeClient()
 
 	ZADDCommand(NewCommand(fake, "zadd", "z", "1", "a", "1", "b", "2", "c", "1.5", "d"))
-	fake.Text = ""
+	fake.Flush()
 	ZRANGECommand(NewCommand(fake, "zrange", "z", "0", "10"))
 	if fake.CompareMultiBulk(t, "a", "b", "d", "c") {
 		t.Error("zrange: range from 0~10 when z has 1-a, 1-b, 1.5-d, 2-c")
@@ -80,7 +80,7 @@ func TestZCARD(t *testing.T) {
 	fake := NewFakeClient()
 
 	ZADDCommand(NewCommand(fake, "zadd", "z", "1", "a", "1", "b", "2", "c", "1.5", "d"))
-	fake.Text = ""
+	fake.Flush()
 	ZCARDCommand(NewCommand(fake, "zcard", "z"))
 	if fake.CompareInt64(t, 4) {
 		t.Error("zcard: when z has 1-a, 1-b, 1.5-d, 2-c")
@@ -91,7 +91,7 @@ func TestZSCORE(t *testing.T) {
 	fake := NewFakeClient()
 
 	ZADDCommand(NewCommand(fake, "zadd", "z", "1", "a", "1", "b", "2", "c", "1.5", "d"))
-	fake.Text = ""
+	fake.Flush()
 
 	ZSCORECommand(NewCommand(fake, "zscore", "z", "c"))
 	if fake.CompareFloat64(t, 2.0) {

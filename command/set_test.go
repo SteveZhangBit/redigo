@@ -29,7 +29,7 @@ func TestSREM(t *testing.T) {
 	}
 
 	SADDCommand(NewCommand(fake, "sadd", "s", "a", "b"))
-	fake.Text = ""
+	fake.Flush()
 	SREMCommand(NewCommand(fake, "srem", "s", "a"))
 	if fake.CompareInt64(t, 1) {
 		t.Error("srem: when s and a exists")
@@ -50,7 +50,7 @@ func TestSISMEMBER(t *testing.T) {
 	}
 
 	SADDCommand(NewCommand(fake, "sadd", "s", "a", "b"))
-	fake.Text = ""
+	fake.Flush()
 	SISMEMBERCommand(NewCommand(fake, "sismember", "s", "a"))
 	if fake.CompareText(t, redigo.COne) {
 		t.Error("sismember: when s and a exists")
@@ -70,7 +70,7 @@ func TestSCARD(t *testing.T) {
 	}
 
 	SADDCommand(NewCommand(fake, "sadd", "s", "a", "b"))
-	fake.Text = ""
+	fake.Flush()
 	SCARDCommand(NewCommand(fake, "scard", "s"))
 	if fake.CompareInt64(t, 2) {
 		t.Error("scard: when s has a and b")
@@ -86,10 +86,10 @@ func TestSPOP(t *testing.T) {
 	}
 
 	SADDCommand(NewCommand(fake, "sadd", "s", "a", "b", "c"))
-	fake.Text = ""
+	fake.Flush()
 	SPOPCommand(NewCommand(fake, "spop", "s"))
-	t.Logf("%q", fake.Text)
-	fake.Text = ""
+	t.Logf("%q", fake.Text())
+	fake.Flush()
 	SCARDCommand(NewCommand(fake, "scard", "s"))
 	if fake.CompareInt64(t, 2) {
 		t.Error("spop: when s had abc and poped one")

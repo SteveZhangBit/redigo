@@ -40,19 +40,19 @@ func (r *RedigoDB) GetDict() map[string]interface{} {
 	return r.dict
 }
 
-func (r *RedigoDB) LookupKey(key string) interface{} {
+func (r *RedigoDB) LookupKey(key []byte) interface{} {
 	/* TODO: Update the access time for the ageing algorithm.
 	 * Don't do it if we have a saving child, as this will trigger
 	 * a copy on write madness. */
 
-	o, _ := r.dict[key]
+	o, _ := r.dict[string(key)]
 	return o
 }
 
-func (r *RedigoDB) LookupKeyRead(key string) interface{} {
+func (r *RedigoDB) LookupKeyRead(key []byte) interface{} {
 	r.ExpireIfNeed(key)
 
-	if o, ok := r.dict[key]; !ok {
+	if o, ok := r.dict[string(key)]; !ok {
 		r.server.keyspaceMisses++
 		return nil
 	} else {
@@ -61,7 +61,7 @@ func (r *RedigoDB) LookupKeyRead(key string) interface{} {
 	}
 }
 
-func (r *RedigoDB) LookupKeyWrite(key string) interface{} {
+func (r *RedigoDB) LookupKeyWrite(key []byte) interface{} {
 	r.ExpireIfNeed(key)
 	return r.LookupKey(key)
 }
@@ -70,9 +70,9 @@ func (r *RedigoDB) LookupKeyWrite(key string) interface{} {
  * counter of the value if needed.
  *
  * The program is aborted if the key already exists. */
-func (r *RedigoDB) Add(key string, val interface{}) {
-	if _, ok := r.dict[key]; !ok {
-		r.dict[key] = val
+func (r *RedigoDB) Add(key []byte, val interface{}) {
+	if _, ok := r.dict[string(key)]; !ok {
+		r.dict[string(key)] = val
 		if _, ok = val.(rtype.List); ok {
 			r.signalListAsReady(key)
 		}
@@ -81,20 +81,20 @@ func (r *RedigoDB) Add(key string, val interface{}) {
 	}
 }
 
-func (r *RedigoDB) Update(key string, val interface{}) {
-	if _, ok := r.dict[key]; ok {
-		r.dict[key] = val
+func (r *RedigoDB) Update(key []byte, val interface{}) {
+	if _, ok := r.dict[string(key)]; ok {
+		r.dict[string(key)] = val
 	} else {
 		panic(fmt.Sprintf("Key %s doesn't exist", key))
 	}
 }
 
-func (r *RedigoDB) Delete(key string) (ok bool) {
-	if _, ok = r.expires[key]; ok {
-		delete(r.expires, key)
+func (r *RedigoDB) Delete(key []byte) (ok bool) {
+	if _, ok = r.expires[string(key)]; ok {
+		delete(r.expires, string(key))
 	}
-	if _, ok = r.dict[key]; ok {
-		delete(r.dict, key)
+	if _, ok = r.dict[string(key)]; ok {
+		delete(r.dict, string(key))
 	}
 	return
 }
@@ -105,22 +105,22 @@ func (r *RedigoDB) Delete(key string) (ok bool) {
  * 1) The ref count of the value object is incremented.
  * 2) clients WATCHing for the destination key notified.
  * 3) The expire time of the key is reset (the key is made persistent). */
-func (r *RedigoDB) SetKeyPersist(key string, val interface{}) {
+func (r *RedigoDB) SetKeyPersist(key []byte, val interface{}) {
 	if r.LookupKeyWrite(key) == nil {
 		r.Add(key, val)
 	} else {
-		r.dict[key] = val
+		r.dict[string(key)] = val
 	}
 	r.removeExpire(key)
 	r.SignalModifyKey(key)
 }
 
-func (r *RedigoDB) Exists(key string) (ok bool) {
-	_, ok = r.dict[key]
+func (r *RedigoDB) Exists(key []byte) (ok bool) {
+	_, ok = r.dict[string(key)]
 	return
 }
 
-func (r *RedigoDB) RandomKey() (key string) {
+func (r *RedigoDB) RandomKey() (key []byte) {
 	keys := make([]string, len(r.dict))
 
 	i := 0
@@ -130,7 +130,7 @@ func (r *RedigoDB) RandomKey() (key string) {
 	}
 
 	for {
-		key = keys[rand.Intn(len(keys))]
+		key = []byte(keys[rand.Intn(len(keys))])
 		if r.ExpireIfNeed(key) {
 			continue
 		}
@@ -147,47 +147,46 @@ func (r *RedigoDB) RandomKey() (key string) {
  * Every time a DB is flushed the function signalFlushDb() is called.
  *----------------------------------------------------------------------------*/
 
-func (r *RedigoDB) SignalModifyKey(key string) {
+func (r *RedigoDB) SignalModifyKey(key []byte) {
 
 }
 
-func (r *RedigoDB) signalListAsReady(key string) {
+func (r *RedigoDB) signalListAsReady(key []byte) {
 	// No clients blocking for this key? No need to queue it
-	if _, ok := r.blockingKeys[key]; !ok {
+	if _, ok := r.blockingKeys[string(key)]; !ok {
 		return
 	}
 	// Key was already signaled? No need to queue it again
-	if _, ok := r.readyKeys[key]; ok {
+	if _, ok := r.readyKeys[string(key)]; ok {
 		return
 	}
 
 	// Ok, we need to queue this key into server.ready_keys
-	rk := ReadyKey{DB: r, Key: key}
-	r.server.readyKeys = append(r.server.readyKeys, rk)
+	r.server.readyKeys = append(r.server.readyKeys, ReadyKey{DB: r, Key: key})
 
 	/* We also add the key in the db->ready_keys dictionary in order
 	 * to avoid adding it multiple times into a list with a simple O(1)
 	 * check. */
-	r.readyKeys[key] = struct{}{}
+	r.readyKeys[string(key)] = struct{}{}
 }
 
 /*-----------------------------------------------------------------------------
  * Expires API
  *----------------------------------------------------------------------------*/
 
-func (r *RedigoDB) ExpireIfNeed(key string) bool {
+func (r *RedigoDB) ExpireIfNeed(key []byte) bool {
 	return false
 }
 
-func (r *RedigoDB) GetExpire(key string) time.Duration {
+func (r *RedigoDB) GetExpire(key []byte) time.Duration {
 	return time.Duration(-1)
 }
 
-func (r *RedigoDB) SetExpire(key string, t time.Duration) {
+func (r *RedigoDB) SetExpire(key []byte, t time.Duration) {
 
 }
 
-func (r *RedigoDB) removeExpire(key string) {
+func (r *RedigoDB) removeExpire(key []byte) {
 
 }
 

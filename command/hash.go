@@ -13,7 +13,7 @@ import (
  * Hash type commands
  *----------------------------------------------------------------------------*/
 
-func hashLookupWriteOrCreate(c redigo.CommandArg, key string) (h rtype.HashMap) {
+func hashLookupWriteOrCreate(c redigo.CommandArg, key []byte) (h rtype.HashMap) {
 	if o := c.DB().LookupKeyWrite(key); o == nil {
 		h = hash.New()
 		c.DB().Add(key, h)
@@ -79,7 +79,7 @@ func HMSETCommand(c redigo.CommandArg) {
 func HINCRBYCommand(c redigo.CommandArg) {
 	var h rtype.HashMap
 	var val, incr int64
-	if x, ok := GetInt64FromStringOrReply(c, c.Argv[3], ""); ok {
+	if x, ok := GetInt64FromStringOrReply(c, rstring.New(c.Argv[3]), ""); ok {
 		incr = x
 	} else {
 		return
@@ -109,7 +109,7 @@ func HINCRBYCommand(c redigo.CommandArg) {
 func HINCRBYFLOATCommand(c redigo.CommandArg) {
 	var h rtype.HashMap
 	var val, incr float64
-	if x, ok := GetFloat64FromStringOrReply(c, c.Argv[3], ""); ok {
+	if x, ok := GetFloat64FromStringOrReply(c, rstring.New(c.Argv[3]), ""); ok {
 		incr = x
 	} else {
 		return
@@ -126,7 +126,7 @@ func HINCRBYFLOATCommand(c redigo.CommandArg) {
 	val += incr
 	str := rstring.NewFromFloat64(val)
 	h.Set(c.Argv[2], str)
-	c.AddReplyBulk(str.String())
+	c.AddReplyBulk(str.Bytes())
 	c.DB().SignalModifyKey(c.Argv[1])
 	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_HASH, "hincrbyfloat", c.Argv[1], c.DB().GetID())
 	c.Server().AddDirty(1)
@@ -136,7 +136,7 @@ func HINCRBYFLOATCommand(c redigo.CommandArg) {
 	 * will not create differences in replicas or after an AOF restart. */
 }
 
-func hashAddFieldToReply(c redigo.CommandArg, h rtype.HashMap, key string) {
+func hashAddFieldToReply(c redigo.CommandArg, h rtype.HashMap, key []byte) {
 	if h == nil {
 		c.AddReply(redigo.NullBulk)
 		return
@@ -144,7 +144,7 @@ func hashAddFieldToReply(c redigo.CommandArg, h rtype.HashMap, key string) {
 	if val, ok := h.Get(key); !ok {
 		c.AddReply(redigo.NullBulk)
 	} else {
-		c.AddReplyBulk(val.String())
+		c.AddReplyBulk(val.Bytes())
 	}
 }
 
@@ -239,14 +239,14 @@ func hashGetAll(c redigo.CommandArg, flags int) {
 	c.AddReplyMultiBulkLen(length)
 
 	count := 0
-	h.Iterate(func(key string, val rtype.String) {
+	h.Iterate(func(key []byte, val rtype.String) {
 		if flags&rtype.REDIS_HASH_KEY > 0 {
 			count++
 			c.AddReplyBulk(key)
 		}
 		if flags&rtype.REDIS_HASH_VALUE > 0 {
 			count++
-			c.AddReplyBulk(val.String())
+			c.AddReplyBulk(val.Bytes())
 		}
 	})
 	if count != length {

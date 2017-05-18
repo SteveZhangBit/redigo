@@ -314,7 +314,7 @@ type RedigoServer struct {
  * server.ready_keys list. */
 type ReadyKey struct {
 	DB  *RedigoDB
-	Key string
+	Key []byte
 }
 
 /* =================================server init methods ======================================= */
@@ -326,7 +326,7 @@ func NewServer() *RedigoServer {
 		BindAddr:  []string{""},
 		newClient: make(chan *RedigoClient, 1),
 		delClient: make(chan *RedigoClient, 1),
-		Verbosity: REDIS_DEBUG,
+		Verbosity: REDIS_WARNING,
 		DBNum:     4,
 	}
 	s.clients = list.New()
@@ -436,7 +436,7 @@ func (r *RedigoServer) listen() {
 		listener, err := net.Listen("tcp", addr)
 
 		if err != nil {
-			r.RedigoLog(REDIS_WARNING, "Creating Server TCP listening socket %s: %s", addr, err)
+			r.RedigoLog(REDIS_DEBUG, "Creating Server TCP listening socket %s: %s", addr, err)
 			continue
 		}
 
@@ -446,7 +446,7 @@ func (r *RedigoServer) listen() {
 
 			for {
 				if conn, err := l.Accept(); err != nil {
-					r.RedigoLog(REDIS_WARNING, "Accepting Server TCP listening socket %s: %s", addr, err)
+					r.RedigoLog(REDIS_DEBUG, "Accepting Server TCP listening socket %s: %s", addr, err)
 					break
 				} else {
 					// Create client
@@ -488,11 +488,14 @@ func (r *RedigoServer) RedigoLog(level int, fm string, objs ...interface{}) {
  * if 0 is returned the client was destroyed (i.e. after QUIT). */
 func (r *RedigoServer) processCommand(c redigo.CommandArg) bool {
 	r.procLock.Lock()
-	defer r.procLock.Unlock()
+	defer func() {
+		r.procLock.Unlock()
+		c.Client.(*RedigoClient).Flush()
+	}()
 	/* Now lookup the command and check ASAP about trivial error conditions
 	 * such as wrong arity, bad command name and so forth. */
 
-	cmd, ok := r.Commands[strings.ToLower(c.Argv[0])]
+	cmd, ok := r.Commands[strings.ToLower(string(c.Argv[0]))]
 	c.Client.(*RedigoClient).lastcmd = cmd
 	if !ok {
 		c.AddReplyError(fmt.Sprintf("unknown command '%s'", c.Argv[0]))
@@ -543,14 +546,14 @@ func (r *RedigoServer) handleClientsBlockedOnLists() {
 		rk := l[0]
 		/* First of all remove this key from db->ready_keys so that
 		 * we can safely call signalListAsReady() against this key. */
-		delete(rk.DB.readyKeys, rk.Key)
+		delete(rk.DB.readyKeys, string(rk.Key))
 
 		/* If the key exists and it's a list, serve blocked clients
 		 * with data. */
 		if o, ok := rk.DB.LookupKeyWrite(rk.Key).(rtype.List); ok {
 			/* We serve clients in the same order they blocked for
 			 * this key, from the first blocked to the last. */
-			if cls, ok := rk.DB.blockingKeys[rk.Key]; ok {
+			if cls, ok := rk.DB.blockingKeys[string(rk.Key)]; ok {
 				for i := 0; i < len(cls); i++ {
 					var where int
 					var reciever *RedigoClient = cls[i]
@@ -610,10 +613,10 @@ func (r *RedigoServer) handleClientsBlockedOnLists() {
  * should be undone as the client was not served: This only happens for
  * BRPOPLPUSH that fails to push the value to the destination key as it is
  * of the wrong type. */
-func (r *RedigoServer) serveClientBlockedOnList(receiver *RedigoClient, key string, db *RedigoDB, val rtype.String, where int) bool {
+func (r *RedigoServer) serveClientBlockedOnList(receiver *RedigoClient, key []byte, db *RedigoDB, val rtype.String, where int) bool {
 	receiver.AddReplyMultiBulkLen(2)
 	receiver.AddReplyBulk(key)
-	receiver.AddReplyBulk(val.String())
+	receiver.AddReplyBulk(val.Bytes())
 	return true
 }
 

@@ -60,7 +60,7 @@ func NewClient() *RedigoClient {
 		bpop:    &ClientBlockState{Keys: make(map[string]struct{})},
 		blocked: make(chan struct{}),
 	}
-	c.RESPWriter = redigo.NewRESPWriterFunc(c.sendReplyToClient)
+	c.RESPWriter = redigo.NewRESPWriter(c)
 
 	return c
 }
@@ -95,24 +95,24 @@ func (r *RedigoClient) close() {
 	r.server.delClient <- r
 }
 
-func (r *RedigoClient) sendReplyToClient(x string) {
-	var err error
-	if _, err = r.outwriter.WriteString(x); err == nil {
-		err = r.outwriter.Flush()
-	}
-	if err != nil {
-		r.server.RedigoLog(REDIS_VERBOSE, "Error writing to client: %s", err)
+func (r *RedigoClient) Write(x []byte) {
+	if _, err := r.outwriter.Write(x); err != nil {
+		r.server.RedigoLog(REDIS_VERBOSE, "Error writing to reply buffer: %s", err)
 		r.close()
-		return
+	} else if r.Flags&REDIS_CLOSE_AFTER_REPLY > 0 {
+		r.close()
 	}
+}
 
-	if r.Flags&REDIS_CLOSE_AFTER_REPLY > 0 {
+func (r *RedigoClient) Flush() {
+	if err := r.outwriter.Flush(); err != nil {
+		r.server.RedigoLog(REDIS_VERBOSE, "Error writing to client: %s", err)
 		r.close()
 	}
 }
 
 func (r *RedigoClient) readNextCommand() {
-	var line string
+	var line []byte
 	var arg redigo.CommandArg
 	var err error
 
@@ -135,8 +135,8 @@ func (r *RedigoClient) readNextCommand() {
 		if !scanner.Scan() {
 			break
 		}
-		line = scanner.Text()
-		if line == "" {
+		line = scanner.Bytes()
+		if len(line) == 0 {
 			continue
 		}
 
@@ -161,7 +161,7 @@ func (r *RedigoClient) setProtocolError() {
 	r.Flags |= REDIS_CLOSE_AFTER_REPLY
 }
 
-func (r *RedigoClient) LookupKeyReadOrReply(key string, reply string) interface{} {
+func (r *RedigoClient) LookupKeyReadOrReply(key []byte, reply []byte) interface{} {
 	x := r.db.LookupKeyRead(key)
 	if x == nil {
 		r.AddReply(reply)
@@ -169,7 +169,7 @@ func (r *RedigoClient) LookupKeyReadOrReply(key string, reply string) interface{
 	return x
 }
 
-func (r *RedigoClient) LookupKeyWriteOrReply(key string, reply string) interface{} {
+func (r *RedigoClient) LookupKeyWriteOrReply(key []byte, reply []byte) interface{} {
 	x := r.db.LookupKeyWrite(key)
 	if x == nil {
 		r.AddReply(reply)
@@ -180,7 +180,7 @@ func (r *RedigoClient) LookupKeyWriteOrReply(key string, reply string) interface
 /*================================= blocking APIs ======================================*/
 
 // Set a client in blocking mode for the specified key, with the specified timeout
-func (r *RedigoClient) BlockForKeys(keys []string, timeout time.Duration) {
+func (r *RedigoClient) BlockForKeys(keys [][]byte, timeout time.Duration) {
 	r.bpop.Timeout = timeout
 
 	for i := 0; i < len(keys); i++ {
@@ -188,14 +188,14 @@ func (r *RedigoClient) BlockForKeys(keys []string, timeout time.Duration) {
 		var ok bool
 
 		// If the key already exists in the dict ignore it
-		if _, ok = r.bpop.Keys[keys[i]]; ok {
+		if _, ok = r.bpop.Keys[string(keys[i])]; ok {
 			continue
 		}
-		r.bpop.Keys[keys[i]] = struct{}{}
-		if cls, ok = r.db.blockingKeys[keys[i]]; !ok {
+		r.bpop.Keys[string(keys[i])] = struct{}{}
+		if cls, ok = r.db.blockingKeys[string(keys[i])]; !ok {
 			cls = make([]*RedigoClient, 0, 1)
 		}
-		r.db.blockingKeys[keys[i]] = append(cls, r)
+		r.db.blockingKeys[string(keys[i])] = append(cls, r)
 	}
 	r.block()
 }
