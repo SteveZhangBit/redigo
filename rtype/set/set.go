@@ -59,11 +59,11 @@ type IntsetSet struct {
 }
 
 func (i *IntsetSet) Add(val rtype.String) bool {
-	return i.s.Add(int64(val.(rstring.IntString)))
+	return i.s.Add(val.(*rstring.IntString).Val)
 }
 
 func (i *IntsetSet) Remove(val rtype.String) bool {
-	return i.s.Remove(int64(val.(rstring.IntString)))
+	return i.s.Remove(val.(*rstring.IntString).Val)
 }
 
 func (i *IntsetSet) Size() int {
@@ -71,7 +71,7 @@ func (i *IntsetSet) Size() int {
 }
 
 func (i *IntsetSet) IsMember(val rtype.String) bool {
-	return i.s.Find(int64(val.(rstring.IntString)))
+	return i.s.Find(val.(*rstring.IntString).Val)
 }
 
 func (i *IntsetSet) RandomElement() rtype.String {
@@ -89,9 +89,9 @@ func (i *IntsetSet) Convert() HashSet {
 func New(val rtype.String) rtype.Set {
 	var s rtype.Set
 	switch val.(type) {
-	case rstring.BytesString:
+	case *rstring.BytesString:
 		s = make(HashSet)
-	case rstring.IntString:
+	case *rstring.IntString:
 		s = &IntsetSet{s: intset.New()}
 	}
 	return s

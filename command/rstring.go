@@ -14,8 +14,8 @@ func GetInt64FromStringOrReply(c redigo.CommandArg, o rtype.String, msg string) 
 	switch str := o.(type) {
 	case nil:
 		return 0, true
-	case rstring.IntString:
-		x, ok = int64(str), true
+	case *rstring.IntString:
+		x, ok = str.Val, true
 	default:
 		ok = false
 	}
@@ -33,10 +33,10 @@ func GetFloat64FromStringOrReply(c redigo.CommandArg, o rtype.String, msg string
 	switch str := o.(type) {
 	case nil:
 		return 0.0, true
-	case rstring.IntString:
-		x, ok = float64(str), true
-	case rstring.BytesString:
-		if i, err := strconv.ParseFloat(string(str), 64); err != nil {
+	case *rstring.IntString:
+		x, ok = float64(str.Val), true
+	case *rstring.BytesString:
+		if i, err := strconv.ParseFloat(string(str.Val), 64); err != nil {
 			ok = false
 		} else {
 			x, ok = i, true
@@ -271,7 +271,7 @@ func INCRBYCommand(c redigo.CommandArg) {
 }
 
 func DECRBYCommand(c redigo.CommandArg) {
-	if incr, ok := GetInt64FromStringOrReply(c,rstring.New(c.Argv[2]), ""); ok {
+	if incr, ok := GetInt64FromStringOrReply(c, rstring.New(c.Argv[2]), ""); ok {
 		rstringIncrDecr(c, -incr)
 	}
 }

@@ -2,78 +2,84 @@ package rstring
 
 import (
 	"bytes"
-	"fmt"
 	"strconv"
 
+	"github.com/SteveZhangBit/redigo"
 	"github.com/SteveZhangBit/redigo/rtype"
 )
 
-type BytesString []byte
-
-func (n BytesString) String() string {
-	return string(n)
+type BytesString struct {
+	Val []byte
 }
 
-func (n BytesString) Bytes() []byte {
-	return n
+func (s *BytesString) String() string {
+	return string(s.Val)
 }
 
-func (n BytesString) Len() int64 {
-	return int64(len(n))
+func (s *BytesString) Bytes() []byte {
+	return s.Val
 }
 
-func (n BytesString) Append(b []byte) rtype.String {
-	return BytesString(append(n, b...))
+func (s *BytesString) Len() int64 {
+	return int64(len(s.Val))
 }
 
-type IntString int64
-
-func (i IntString) String() string {
-	return strconv.FormatInt(int64(i), 10)
+func (s *BytesString) Append(b []byte) rtype.String {
+	s.Val = append(s.Val, b...)
+	return s
 }
 
-func (i IntString) Bytes() []byte {
+type IntString struct {
+	Val int64
+}
+
+func (i *IntString) String() string {
+	return strconv.FormatInt(i.Val, 10)
+}
+
+func (i *IntString) Bytes() []byte {
 	return []byte(i.String())
 }
 
-func (i IntString) Len() int64 {
+func (i *IntString) Len() int64 {
 	var count int64
-	for i > 0 {
+	x := i.Val
+	for x > 0 {
 		count++
-		i /= 10
+		x /= 10
 	}
 	return count
 }
 
-func (i IntString) Append(b []byte) rtype.String {
-	return BytesString(append(i.Bytes(), b...))
+func (i *IntString) Append(b []byte) rtype.String {
+	return &BytesString{append(i.Bytes(), b...)}
 }
 
 func New(val []byte) rtype.String {
 	// Check whether can be convert to integer
 	if val[0] == '+' || val[0] == '-' || (val[0] >= '0' && val[0] <= '9') {
-		if x, err := strconv.ParseInt(string(val), 10, 64); err == nil {
-			return IntString(x)
+		if x, ok := redigo.ParseInt(val, 10, 64); ok {
+			return &IntString{x}
 		}
 	}
-	return BytesString(val)
+	return &BytesString{val}
 }
 
 func NewFromInt64(val int64) rtype.String {
-	return IntString(val)
+	return &IntString{val}
 }
 
 func NewFromFloat64(val float64) rtype.String {
-	return BytesString(fmt.Sprintf("%.17g", val))
+	return &BytesString{[]byte(strconv.FormatFloat(val, 'g', 17, 64))}
 }
 
 func CompareStringObjects(a, b rtype.String) int {
-	x, x_ok := a.(IntString)
-	y, y_ok := b.(IntString)
+	x, x_ok := a.(*IntString)
+	y, y_ok := b.(*IntString)
 	if x_ok && y_ok {
-		if x < y {
+		if x.Val < y.Val {
 			return -1
-		} else if x > y {
+		} else if x.Val > y.Val {
 			return 1
 		} else {
 			return 0
