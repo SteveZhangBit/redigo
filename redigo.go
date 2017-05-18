@@ -3,10 +3,26 @@ package redigo
 import (
 	"bufio"
 	"time"
+	"strconv"
+	"fmt"
 )
 
 const (
 	Version = "0.0.1"
+)
+
+const (
+	REDIS_NOTIFY_STRING = iota
+	REDIS_NOTIFY_LIST
+	REDIS_NOTIFY_HASH
+	REDIS_NOTIFY_SET
+	REDIS_NOTIFY_ZSET
+	REDIS_NOTIFY_GENERIC
+)
+
+const (
+	REDIS_SHARED_INTEGERS    = 10000
+	REDIS_SHARED_BULKHDR_LEN = 32
 )
 
 var (
@@ -27,14 +43,25 @@ var (
 	SameObjectErr  = []byte("-ERR source and destination objects are the same\r\n")
 )
 
-const (
-	REDIS_NOTIFY_STRING = iota
-	REDIS_NOTIFY_LIST
-	REDIS_NOTIFY_HASH
-	REDIS_NOTIFY_SET
-	REDIS_NOTIFY_ZSET
-	REDIS_NOTIFY_GENERIC
+var (
+	SharedIntegers [][]byte
+	Sharedmbulkhdr [][]byte
+	Sharedbulkhdr  [][]byte
 )
+
+func init() {
+	SharedIntegers = make([][]byte, REDIS_SHARED_INTEGERS)
+	for i := 0; i < REDIS_SHARED_INTEGERS; i++ {
+		SharedIntegers[i] = []byte(strconv.Itoa(i))
+	}
+
+	Sharedmbulkhdr = make([][]byte, REDIS_SHARED_BULKHDR_LEN)
+	Sharedbulkhdr = make([][]byte, REDIS_SHARED_BULKHDR_LEN)
+	for i := 0; i < REDIS_SHARED_BULKHDR_LEN; i++ {
+		Sharedmbulkhdr[i] = []byte(fmt.Sprintf("*%d\r\n", i))
+		Sharedbulkhdr[i] = []byte(fmt.Sprintf("$%d\r\n", i))
+	}
+}
 
 /* With multiplexing we need to take per-client state.
  * Clients are taken in a linked list. */
@@ -56,11 +83,13 @@ type Client interface {
 
 type Writer interface {
 	Write(b []byte)
+	WriteString(s string)
 	Flush()
 }
 
 type ProtocolWriter interface {
 	AddReply(x []byte)
+	AddReplyString(x string)
 	AddReplyInt64(x int64)
 	AddReplyFloat64(x float64)
 	AddReplyMultiBulkLen(x int)

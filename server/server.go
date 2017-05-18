@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"time"
 
@@ -488,20 +487,20 @@ func (r *RedigoServer) RedigoLog(level int, fm string, objs ...interface{}) {
  * if 0 is returned the client was destroyed (i.e. after QUIT). */
 func (r *RedigoServer) processCommand(c redigo.CommandArg) bool {
 	r.procLock.Lock()
-	defer func() {
-		r.procLock.Unlock()
-		c.Client.(*RedigoClient).Flush()
-	}()
 	/* Now lookup the command and check ASAP about trivial error conditions
 	 * such as wrong arity, bad command name and so forth. */
 
-	cmd, ok := r.Commands[strings.ToLower(string(c.Argv[0]))]
+	cmd, ok := r.Commands[string(redigo.ToLower(c.Argv[0]))]
 	c.Client.(*RedigoClient).lastcmd = cmd
 	if !ok {
-		c.AddReplyError(fmt.Sprintf("unknown command '%s'", c.Argv[0]))
+		c.AddReplyError(fmt.Sprintf("unknown command '%s'", string(c.Argv[0])))
+		r.procLock.Unlock()
+		c.Client.(*RedigoClient).Flush()
 		return true
 	} else if (cmd.Arity > 0 && cmd.Arity != c.Argc) || (c.Argc < -cmd.Arity) {
 		c.AddReplyError(fmt.Sprintf("wrong number of arguments for '%s' command", cmd.Name))
+		r.procLock.Unlock()
+		c.Client.(*RedigoClient).Flush()
 		return true
 	}
 
@@ -510,6 +509,8 @@ func (r *RedigoServer) processCommand(c redigo.CommandArg) bool {
 	if len(r.readyKeys) > 0 {
 		r.handleClientsBlockedOnLists()
 	}
+	r.procLock.Unlock()
+	c.Client.(*RedigoClient).Flush()
 	return true
 }
 

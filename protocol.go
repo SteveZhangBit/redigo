@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strconv"
 	"unicode"
 )
 
@@ -21,13 +20,21 @@ func (r *RESPWriter) AddReply(x []byte) {
 	r.Write(x)
 }
 
+func (r *RESPWriter) AddReplyString(x string) {
+	r.WriteString(x)
+}
+
 func (r *RESPWriter) AddReplyInt64(x int64) {
 	if x == 0 {
 		r.AddReply(CZero)
 	} else if x == 1 {
 		r.AddReply(COne)
+	} else if x < REDIS_SHARED_INTEGERS {
+		r.AddReply(Colon)
+		r.AddReply(SharedIntegers[x])
+		r.AddReply(CRLF)
 	} else {
-		r.AddReply([]byte(fmt.Sprintf(":%d\r\n", x)))
+		r.AddReplyString(fmt.Sprintf(":%d\r\n", x))
 	}
 }
 
@@ -40,29 +47,37 @@ func (r *RESPWriter) AddReplyFloat64(x float64) {
 		}
 	} else {
 		s := fmt.Sprintf("%.17g", x)
-		r.AddReply([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(s), s)))
+		r.AddReplyString(fmt.Sprintf("$%d\r\n%s\r\n", len(s), s))
 	}
 }
 
 func (r *RESPWriter) AddReplyMultiBulkLen(x int) {
-	r.AddReply([]byte(fmt.Sprintf("*%d\r\n", x)))
+	if x < REDIS_SHARED_BULKHDR_LEN {
+		r.AddReply(Sharedmbulkhdr[x])
+	} else {
+		r.AddReplyString(fmt.Sprintf("*%d\r\n", x))
+	}
 }
 
 func (r *RESPWriter) AddReplyBulk(x []byte) {
-	r.AddReply([]byte(fmt.Sprintf("$%d\r\n", len(x))))
+	if len(x) < REDIS_SHARED_BULKHDR_LEN {
+		r.AddReply(Sharedbulkhdr[len(x)])
+	} else {
+		r.AddReplyString(fmt.Sprintf("$%d\r\n", len(x)))
+	}
 	r.AddReply(x)
 	r.AddReply(CRLF)
 }
 
 func (r *RESPWriter) AddReplyError(msg string) {
-	r.AddReply([]byte("-ERR "))
-	r.AddReply([]byte(msg))
+	r.AddReplyString("-ERR ")
+	r.AddReplyString(msg)
 	r.AddReply(CRLF)
 }
 
 func (r *RESPWriter) AddReplyStatus(msg string) {
-	r.AddReply([]byte("+"))
-	r.AddReply([]byte(msg))
+	r.AddReplyString("+")
+	r.AddReplyString(msg)
 	r.AddReply(CRLF)
 }
 
@@ -70,9 +85,7 @@ func NewRESPWriter(wr Writer) *RESPWriter {
 	return &RESPWriter{wr}
 }
 
-type RESPReader struct {
-	//argv [][]byte
-}
+type RESPReader struct{}
 
 func splitInlineArgs(line []byte) ([][]byte, bool) {
 	length := len(line)
@@ -180,8 +193,8 @@ func (r *RESPReader) ReadMultiBulkCommand(scanner *bufio.Scanner) (arg CommandAr
 	}
 
 	// Find out the multi bulk length.
-	var mbulklen int
-	if x, e := strconv.Atoi(string(line[1:])); e != nil || x > 1024*1024 {
+	var mbulklen int64
+	if x, ok := ParseInt(line[1:], 10, 64); !ok || x > 1024*1024 {
 		err = errors.New("Protocol error: invalid multibulk length")
 		return
 	} else {
@@ -189,7 +202,7 @@ func (r *RESPReader) ReadMultiBulkCommand(scanner *bufio.Scanner) (arg CommandAr
 	}
 	argv = make([][]byte, mbulklen)
 
-	var i int
+	var i int64
 	for i = 0; i < mbulklen && scanner.Scan(); i++ {
 		line = scanner.Bytes()
 		if len(line) > REDIS_INLINE_MAXSIZE {
@@ -202,7 +215,7 @@ func (r *RESPReader) ReadMultiBulkCommand(scanner *bufio.Scanner) (arg CommandAr
 			return
 		}
 
-		if bulklen, e := strconv.Atoi(string(line[1:])); e != nil || bulklen > 512*1024*1024 {
+		if bulklen, ok := ParseInt(line[1:], 10, 64); !ok || bulklen > 512*1024*1024 {
 			err = errors.New("Protocol error: invalid bulk length")
 			return
 		} else {
@@ -211,7 +224,7 @@ func (r *RESPReader) ReadMultiBulkCommand(scanner *bufio.Scanner) (arg CommandAr
 				return
 			}
 			line = scanner.Bytes()
-			if len(line) != bulklen {
+			if int64(len(line)) != bulklen {
 				err = errors.New("Protocol error: bulk length doesn't match data length")
 				return
 			}
@@ -223,7 +236,7 @@ func (r *RESPReader) ReadMultiBulkCommand(scanner *bufio.Scanner) (arg CommandAr
 		return
 	}
 
-	arg.Argc = mbulklen
+	arg.Argc = len(argv)
 	arg.Argv = argv
 	return
 }

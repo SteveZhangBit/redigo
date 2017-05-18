@@ -104,6 +104,15 @@ func (r *RedigoClient) Write(x []byte) {
 	}
 }
 
+func (r *RedigoClient) WriteString(x string) {
+	if _, err := r.outwriter.WriteString(x); err != nil {
+		r.server.RedigoLog(REDIS_VERBOSE, "Error writing to reply buffer: %s", err)
+		r.close()
+	} else if r.Flags&REDIS_CLOSE_AFTER_REPLY > 0 {
+		r.close()
+	}
+}
+
 func (r *RedigoClient) Flush() {
 	if err := r.outwriter.Flush(); err != nil {
 		r.server.RedigoLog(REDIS_VERBOSE, "Error writing to client: %s", err)
