@@ -284,7 +284,7 @@ type RedigoServer struct {
 	Verbosity int
 	// Command
 	Commands map[string]*RedigoCommand
-	procLock sync.Mutex
+	rwLock   sync.RWMutex
 	// DB
 	DBNum int
 	dbs   []*RedigoDB
@@ -486,7 +486,6 @@ func (r *RedigoServer) RedigoLog(level int, fm string, objs ...interface{}) {
  * other operations can be performed by the caller. Otherwise
  * if 0 is returned the client was destroyed (i.e. after QUIT). */
 func (r *RedigoServer) processCommand(c redigo.CommandArg) bool {
-	r.procLock.Lock()
 	/* Now lookup the command and check ASAP about trivial error conditions
 	 * such as wrong arity, bad command name and so forth. */
 
@@ -494,27 +493,27 @@ func (r *RedigoServer) processCommand(c redigo.CommandArg) bool {
 	c.Client.(*RedigoClient).lastcmd = cmd
 	if !ok {
 		c.AddReplyError(fmt.Sprintf("unknown command '%s'", string(c.Argv[0])))
-		r.procLock.Unlock()
 		c.Client.(*RedigoClient).Flush()
 		return true
 	} else if (cmd.Arity > 0 && cmd.Arity != c.Argc) || (c.Argc < -cmd.Arity) {
 		c.AddReplyError(fmt.Sprintf("wrong number of arguments for '%s' command", cmd.Name))
-		r.procLock.Unlock()
 		c.Client.(*RedigoClient).Flush()
 		return true
 	}
 
 	r.call(c, cmd)
-	// If there are clients blocked on lists
-	if len(r.readyKeys) > 0 {
-		r.handleClientsBlockedOnLists()
-	}
-	r.procLock.Unlock()
 	c.Client.(*RedigoClient).Flush()
 	return true
 }
 
 func (r *RedigoServer) call(c redigo.CommandArg, cmd *RedigoCommand) {
+	// Lock
+	if cmd.Flags&REDIS_CMD_WRITE > 0 {
+		r.rwLock.Lock()
+	} else {
+		r.rwLock.RLock()
+	}
+
 	/* Call the command. */
 	dirty := r.dirty
 	start := time.Now()
@@ -529,6 +528,17 @@ func (r *RedigoServer) call(c redigo.CommandArg, cmd *RedigoCommand) {
 	cmd.Calls++
 
 	r.StatNumCommands++
+	// If there are clients blocked on lists
+	if len(r.readyKeys) > 0 {
+		r.handleClientsBlockedOnLists()
+	}
+
+	// Unlock and return
+	if cmd.Flags&REDIS_CMD_WRITE > 0 {
+		r.rwLock.Unlock()
+	} else {
+		r.rwLock.RUnlock()
+	}
 }
 
 /* This function should be called by Redis every time a single command,

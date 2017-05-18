@@ -61,6 +61,7 @@ func NewClient() *RedigoClient {
 		blocked: make(chan struct{}),
 	}
 	c.RESPWriter = redigo.NewRESPWriter(c)
+	c.RESPReader = redigo.NewRESPReader()
 
 	return c
 }

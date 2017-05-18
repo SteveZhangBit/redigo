@@ -85,7 +85,13 @@ func NewRESPWriter(wr Writer) *RESPWriter {
 	return &RESPWriter{wr}
 }
 
-type RESPReader struct{}
+type RESPReader struct {
+	argv [][]byte
+}
+
+func NewRESPReader() *RESPReader {
+	return &RESPReader{make([][]byte, 4)}
+}
 
 func splitInlineArgs(line []byte) ([][]byte, bool) {
 	length := len(line)
@@ -183,7 +189,6 @@ func (r *RESPReader) ReadInlineCommand(line []byte) (arg CommandArg, err error) 
 
 func (r *RESPReader) ReadMultiBulkCommand(scanner *bufio.Scanner) (arg CommandArg, err error) {
 	var line []byte
-	var argv [][]byte
 
 	// Read multi builk length
 	line = scanner.Bytes()
@@ -200,9 +205,10 @@ func (r *RESPReader) ReadMultiBulkCommand(scanner *bufio.Scanner) (arg CommandAr
 	} else {
 		mbulklen = x
 	}
-	argv = make([][]byte, mbulklen)
 
 	var i int64
+
+	argv_len := int64(len(r.argv))
 	for i = 0; i < mbulklen && scanner.Scan(); i++ {
 		line = scanner.Bytes()
 		if len(line) > REDIS_INLINE_MAXSIZE {
@@ -228,7 +234,11 @@ func (r *RESPReader) ReadMultiBulkCommand(scanner *bufio.Scanner) (arg CommandAr
 				err = errors.New("Protocol error: bulk length doesn't match data length")
 				return
 			}
-			argv[i] = line
+			if i < argv_len {
+				r.argv[i] = line
+			} else {
+				r.argv = append(r.argv, line)
+			}
 		}
 	}
 	if i != mbulklen {
@@ -236,7 +246,7 @@ func (r *RESPReader) ReadMultiBulkCommand(scanner *bufio.Scanner) (arg CommandAr
 		return
 	}
 
-	arg.Argc = len(argv)
-	arg.Argv = argv
+	arg.Argc = int(mbulklen)
+	arg.Argv = r.argv
 	return
 }

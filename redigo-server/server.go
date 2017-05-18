@@ -9,6 +9,7 @@ import (
 
 	"github.com/SteveZhangBit/redigo"
 	"github.com/SteveZhangBit/redigo/server"
+	"runtime"
 )
 
 const Logo = "\n" +
@@ -34,6 +35,7 @@ var cpuprofile = flag.String("cpuprofile", "", "write cpu profile `file`")
 
 func main() {
 	// TODO: initServerConfig
+	runtime.GOMAXPROCS(1)
 
 	flag.Parse()
 	if *cpuprofile != "" {
