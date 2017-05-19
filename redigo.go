@@ -2,9 +2,9 @@ package redigo
 
 import (
 	"bufio"
-	"time"
-	"strconv"
 	"fmt"
+	"strconv"
+	"time"
 )
 
 const (
@@ -36,7 +36,6 @@ var (
 	EmptyMultiBulk = []byte("*0\r\n")
 	Pong           = []byte("+PONG\r\n")
 	WrongTypeErr   = []byte("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n")
-	Colon          = []byte(":")
 	SyntaxErr      = []byte("-ERR syntax error\r\n")
 	NoKeyErr       = []byte("-ERR no such key\r\n")
 	OutOfRangeErr  = []byte("-ERR index out of range\r\n")
@@ -83,12 +82,14 @@ type Client interface {
 
 type Writer interface {
 	Write(b []byte)
+	WriteByte(x byte)
 	WriteString(s string)
 	Flush()
 }
 
 type ProtocolWriter interface {
 	AddReply(x []byte)
+	AddReplyByte(x byte)
 	AddReplyString(x string)
 	AddReplyInt64(x int64)
 	AddReplyFloat64(x float64)

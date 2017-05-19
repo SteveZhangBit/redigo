@@ -16,6 +16,10 @@ func (w *TextWriter) Write(b []byte) {
 	w.Text = append(w.Text, b...)
 }
 
+func (w *TextWriter) WriteByte(x byte) {
+	w.Text = append(w.Text, x)
+}
+
 func (w *TextWriter) WriteString(x string) {
 	w.Write([]byte(x))
 }

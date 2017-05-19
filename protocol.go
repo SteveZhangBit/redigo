@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 	"unicode"
 )
 
@@ -20,6 +21,10 @@ func (r *RESPWriter) AddReply(x []byte) {
 	r.Write(x)
 }
 
+func (r *RESPWriter) AddReplyByte(x byte) {
+	r.WriteByte(x)
+}
+
 func (r *RESPWriter) AddReplyString(x string) {
 	r.WriteString(x)
 }
@@ -30,11 +35,13 @@ func (r *RESPWriter) AddReplyInt64(x int64) {
 	} else if x == 1 {
 		r.AddReply(COne)
 	} else if x < REDIS_SHARED_INTEGERS {
-		r.AddReply(Colon)
+		r.AddReplyByte(':')
 		r.AddReply(SharedIntegers[x])
 		r.AddReply(CRLF)
 	} else {
-		r.AddReplyString(fmt.Sprintf(":%d\r\n", x))
+		r.AddReplyByte(':')
+		r.AddReplyString(strconv.FormatInt(x, 10))
+		r.AddReply(CRLF)
 	}
 }
 
@@ -46,8 +53,7 @@ func (r *RESPWriter) AddReplyFloat64(x float64) {
 			r.AddReplyBulk([]byte("-inf"))
 		}
 	} else {
-		s := fmt.Sprintf("%.17g", x)
-		r.AddReplyString(fmt.Sprintf("$%d\r\n%s\r\n", len(s), s))
+		r.AddReplyBulk([]byte(strconv.FormatFloat(x, 'g', 17, 64)))
 	}
 }
 
@@ -55,7 +61,9 @@ func (r *RESPWriter) AddReplyMultiBulkLen(x int) {
 	if x < REDIS_SHARED_BULKHDR_LEN {
 		r.AddReply(Sharedmbulkhdr[x])
 	} else {
-		r.AddReplyString(fmt.Sprintf("*%d\r\n", x))
+		r.AddReplyByte('*')
+		r.AddReplyString(strconv.Itoa(x))
+		r.AddReply(CRLF)
 	}
 }
 
@@ -63,7 +71,9 @@ func (r *RESPWriter) AddReplyBulk(x []byte) {
 	if len(x) < REDIS_SHARED_BULKHDR_LEN {
 		r.AddReply(Sharedbulkhdr[len(x)])
 	} else {
-		r.AddReplyString(fmt.Sprintf("$%d\r\n", len(x)))
+		r.AddReplyByte('$')
+		r.AddReplyString(strconv.Itoa(len(x)))
+		r.AddReply(CRLF)
 	}
 	r.AddReply(x)
 	r.AddReply(CRLF)
@@ -76,7 +86,7 @@ func (r *RESPWriter) AddReplyError(msg string) {
 }
 
 func (r *RESPWriter) AddReplyStatus(msg string) {
-	r.AddReplyString("+")
+	r.AddReplyByte('+')
 	r.AddReplyString(msg)
 	r.AddReply(CRLF)
 }

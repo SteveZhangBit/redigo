@@ -1,9 +1,10 @@
 package command
 
 import (
+	"bytes"
+
 	"github.com/SteveZhangBit/redigo"
 	"github.com/SteveZhangBit/redigo/rtype"
-	"bytes"
 	"github.com/SteveZhangBit/redigo/rtype/rstring"
 )
 

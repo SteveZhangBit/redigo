@@ -4,12 +4,12 @@ import (
 	"flag"
 	"log"
 	"os"
+	"runtime"
 	"runtime/pprof"
 	"unsafe"
 
 	"github.com/SteveZhangBit/redigo"
 	"github.com/SteveZhangBit/redigo/server"
-	"runtime"
 )
 
 const Logo = "\n" +

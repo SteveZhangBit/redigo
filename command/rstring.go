@@ -250,9 +250,7 @@ func rstringIncrDecr(c redigo.CommandArg, incr int64) {
 		c.DB().SignalModifyKey(c.Argv[1])
 		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_STRING, "incrby", c.Argv[1], c.DB().GetID())
 		c.Server().AddDirty(1)
-		c.AddReply(redigo.Colon)
-		c.AddReply(str.Bytes())
-		c.AddReply(redigo.CRLF)
+		c.AddReplyInt64(x)
 	}
 }
 
