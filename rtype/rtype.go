@@ -30,15 +30,15 @@ type HashMap interface {
 type List interface {
 	Front() ListElement
 	Back() ListElement
-	InsertAfter(v String, at ListElement) ListElement
-	InsertBefore(v String, at ListElement) ListElement
+	InsertAfter(v String, at ListElement)
+	InsertBefore(v String, at ListElement)
 	Len() int
 	MoveAfter(e, at ListElement)
 	MoveBefore(e, at ListElement)
 	MoveToFront(e ListElement)
 	MoveToBack(e ListElement)
-	PushBack(v String) ListElement
-	PushFront(v String) ListElement
+	PushBack(v String)
+	PushFront(v String)
 	Remove(e ListElement) String
 	SearchKey(v String) ListElement
 	Index(n int) ListElement

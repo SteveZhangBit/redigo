@@ -85,6 +85,7 @@ func listPushx(c redigo.CommandArg, ref rtype.String, val rtype.String, where in
 					l.InsertBefore(val, e)
 				}
 				inserted = true
+				break
 			}
 		}
 

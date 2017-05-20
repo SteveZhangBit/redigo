@@ -4,6 +4,7 @@ import (
 	"container/list"
 
 	"github.com/SteveZhangBit/redigo/rtype"
+	"github.com/SteveZhangBit/redigo/rtype/rstring"
 )
 
 type LLElement struct {
@@ -50,18 +51,12 @@ func (l *LinkedList) Back() rtype.ListElement {
 	return nil
 }
 
-func (l *LinkedList) InsertAfter(v rtype.String, at rtype.ListElement) rtype.ListElement {
-	if e := l.l.InsertAfter(v, at.(*LLElement).e); e != nil {
-		return &LLElement{e: e}
-	}
-	return nil
+func (l *LinkedList) InsertAfter(v rtype.String, at rtype.ListElement) {
+	l.l.InsertAfter(v, at.(*LLElement).e)
 }
 
-func (l *LinkedList) InsertBefore(v rtype.String, at rtype.ListElement) rtype.ListElement {
-	if e := l.l.InsertBefore(v, at.(*LLElement).e); e != nil {
-		return &LLElement{e: e}
-	}
-	return nil
+func (l *LinkedList) InsertBefore(v rtype.String, at rtype.ListElement) {
+	l.l.InsertBefore(v, at.(*LLElement).e)
 }
 
 func (l *LinkedList) Len() int {
@@ -84,18 +79,12 @@ func (l *LinkedList) MoveToBack(e rtype.ListElement) {
 	l.l.MoveToBack(e.(*LLElement).e)
 }
 
-func (l *LinkedList) PushBack(v rtype.String) rtype.ListElement {
-	if e := l.l.PushBack(v); e != nil {
-		return &LLElement{e: e}
-	}
-	return nil
+func (l *LinkedList) PushBack(v rtype.String) {
+	l.l.PushBack(v)
 }
 
-func (l *LinkedList) PushFront(v rtype.String) rtype.ListElement {
-	if e := l.l.PushFront(v); e != nil {
-		return &LLElement{e: e}
-	}
-	return nil
+func (l *LinkedList) PushFront(v rtype.String) {
+	l.l.PushFront(v)
 }
 
 func (l *LinkedList) Remove(e rtype.ListElement) rtype.String {
@@ -105,7 +94,7 @@ func (l *LinkedList) Remove(e rtype.ListElement) rtype.String {
 // Return the element with the value.
 func (l *LinkedList) SearchKey(v rtype.String) rtype.ListElement {
 	for e := l.Front(); e != nil; e = e.Next() {
-		if e.Value() == v {
+		if rstring.EqualStringObjects(e.Value(), v) {
 			return e
 		}
 	}
