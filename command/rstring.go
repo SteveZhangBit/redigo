@@ -169,15 +169,58 @@ func GETRANGECommand(c redigo.CommandArg) {
 }
 
 func MGETCommand(c redigo.CommandArg) {
+	c.AddReplyMultiBulkLen(c.Argc - 1)
+	for i := 1; i < c.Argc; i++ {
+		if o := c.DB().LookupKeyRead(c.Argv[i]); o == nil {
+			c.AddReply(redigo.NullBulk)
+		} else {
+			if val, ok := o.(rtype.String); !ok {
+				c.AddReply(redigo.NullBulk)
+			} else {
+				c.AddReplyBulk(val.Bytes())
+			}
+		}
+	}
+}
 
+func rstringmset(c redigo.CommandArg, nx bool) {
+	if c.Argc%2 == 0 {
+		c.AddReplyError("wrong number of arguments for MSET")
+		return
+	}
+	/* Handle the NX flag. The MSETNX semantic is to return zero and don't
+	 * set nothing at all if at least one already key exists. */
+	busykeys := 0
+	if nx {
+		for i := 1; i < c.Argc; i++ {
+			if c.DB().LookupKeyWrite(c.Argv[i]) != nil {
+				busykeys++
+			}
+		}
+		if busykeys {
+			c.AddReply(redigo.CZero)
+			return
+		}
+	}
+
+	for i := 1; i < c.Argc; i++ {
+		c.DB().SetKeyPersist(c.Argv[i], rstring.New(c.Argv[i+1]))
+		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_STRING, "set", c.Argv[i], c.DB().GetID())
+	}
+	c.Server().AddDirty((c.Argc - 1) / 2)
+	if nx {
+		c.AddReply(redigo.COne)
+	} else {
+		c.AddReply(redigo.OK)
+	}
 }
 
 func MSETCommand(c redigo.CommandArg) {
-
+	rstringmset(c, false)
 }
 
 func MSETNXCommand(c redigo.CommandArg) {
-
+	rstringmset(c, true)
 }
 
 func INCRBYFLOATCommand(c redigo.CommandArg) {
