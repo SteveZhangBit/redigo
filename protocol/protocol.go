@@ -1,33 +1,112 @@
-package redigo
+package protocol
 
 import (
 	"bufio"
 	"errors"
 	"fmt"
+	"github.com/SteveZhangBit/redigo"
+	"github.com/SteveZhangBit/redigo/util"
+	"io"
 	"math"
 	"strconv"
 	"unicode"
-	"github.com/SteveZhangBit/redigo/util"
 )
+
+type Writer interface {
+	AddReply(x []byte)
+	AddReplyByte(x byte)
+	AddReplyString(x string)
+	AddReplyInt64(x int64)
+	AddReplyFloat64(x float64)
+	AddReplyMultiBulkLen(x int)
+	AddReplyBulk(x []byte)
+	AddReplyError(msg string)
+	AddReplyStatus(msg string)
+	Flush() error
+}
+
+type Reader interface {
+	Read() (*redigo.CommandArg, error)
+}
 
 const (
 	REDIS_INLINE_MAXSIZE = 1024 * 60
 )
 
+const (
+	REDIS_SHARED_INTEGERS    = 10000
+	REDIS_SHARED_BULKHDR_LEN = 32
+)
+
+var (
+	CRLF           = []byte("\r\n")
+	OK             = []byte("+OK\r\n")
+	CZero          = []byte(":0\r\n")
+	COne           = []byte(":1\r\n")
+	CNegOne        = []byte(":-1\r\n")
+	NullBulk       = []byte("$-1\r\n")
+	NullMultiBulk  = []byte("*-1\r\n")
+	EmptyMultiBulk = []byte("*0\r\n")
+	Pong           = []byte("+PONG\r\n")
+	WrongTypeErr   = []byte("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n")
+	SyntaxErr      = []byte("-ERR syntax error\r\n")
+	NoKeyErr       = []byte("-ERR no such key\r\n")
+	OutOfRangeErr  = []byte("-ERR index out of range\r\n")
+	SameObjectErr  = []byte("-ERR source and destination objects are the same\r\n")
+)
+
+var (
+	SharedIntegers [][]byte
+	Sharedmbulkhdr [][]byte
+	Sharedbulkhdr  [][]byte
+)
+
+func init() {
+	SharedIntegers = make([][]byte, REDIS_SHARED_INTEGERS)
+	for i := 0; i < REDIS_SHARED_INTEGERS; i++ {
+		SharedIntegers[i] = []byte(strconv.Itoa(i))
+	}
+
+	Sharedmbulkhdr = make([][]byte, REDIS_SHARED_BULKHDR_LEN)
+	Sharedbulkhdr = make([][]byte, REDIS_SHARED_BULKHDR_LEN)
+	for i := 0; i < REDIS_SHARED_BULKHDR_LEN; i++ {
+		Sharedmbulkhdr[i] = []byte(fmt.Sprintf("*%d\r\n", i))
+		Sharedbulkhdr[i] = []byte(fmt.Sprintf("$%d\r\n", i))
+	}
+}
+
 type RESPWriter struct {
-	Writer
+	*bufio.Writer
+	err error
+}
+
+func NewRESPWriter(w io.Writer) *RESPWriter {
+	return &RESPWriter{Writer: bufio.NewWriter(w)}
 }
 
 func (r *RESPWriter) AddReply(x []byte) {
-	r.Write(x)
+	if r.err != nil {
+		_, r.err = r.Write(x)
+	}
 }
 
 func (r *RESPWriter) AddReplyByte(x byte) {
-	r.WriteByte(x)
+	if r.err != nil {
+		r.err = r.WriteByte(x)
+	}
 }
 
 func (r *RESPWriter) AddReplyString(x string) {
-	r.WriteString(x)
+	if r.err != nil {
+		_, r.err = r.WriteString(x)
+	}
+}
+
+func (r *RESPWriter) Flush() error {
+	if r.err != nil {
+		r.err = r.Writer.Flush()
+	}
+	return r.err
 }
 
 func (r *RESPWriter) AddReplyInt64(x int64) {
@@ -92,19 +171,37 @@ func (r *RESPWriter) AddReplyStatus(msg string) {
 	r.AddReply(CRLF)
 }
 
-func NewRESPWriter(wr Writer) *RESPWriter {
-	return &RESPWriter{wr}
-}
-
 type RESPReader struct {
-	argv [][]byte
+	argv    [][]byte
+	scanner *bufio.Scanner
 }
 
-func NewRESPReader() *RESPReader {
-	return &RESPReader{make([][]byte, 4)}
+func NewRESPReader(r io.Reader) *RESPReader {
+	return &RESPReader{argv: make([][]byte, 4), scanner: bufio.NewScanner(r)}
 }
 
-func splitInlineArgs(line []byte) ([][]byte, bool) {
+func (r *RESPReader) Read() (arg *redigo.CommandArg, err error) {
+	if !r.scanner.Scan() {
+		err = io.EOF
+		return
+	}
+
+	for {
+		line := r.scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		if line[0] != '*' {
+			arg, err = r.ReadInlineCommand(line)
+		} else {
+			arg, err = r.ReadMultiBulkCommand()
+		}
+		return
+	}
+}
+
+func (r *RESPReader) splitInlineArgs(line []byte) ([][]byte, bool) {
 	length := len(line)
 
 	var argv [][]byte
@@ -182,27 +279,26 @@ func splitInlineArgs(line []byte) ([][]byte, bool) {
 	return argv, true
 }
 
-func (r *RESPReader) ReadInlineCommand(line []byte) (arg CommandArg, err error) {
+func (r *RESPReader) ReadInlineCommand(line []byte) (arg *redigo.CommandArg, err error) {
 	if len(line) > REDIS_INLINE_MAXSIZE {
 		err = errors.New("Protocol error: too big inline request")
 		return
 	}
 
 	// Split the input buffer
-	if argv, ok := splitInlineArgs(line); !ok {
+	if argv, ok := r.splitInlineArgs(line); !ok {
 		err = errors.New("Protocol error: unbalanced quotes in request")
 	} else {
-		arg.Argc = len(argv)
-		arg.Argv = argv
+		arg = &redigo.CommandArg{Argc: len(argv), Argv: argv}
 	}
 	return
 }
 
-func (r *RESPReader) ReadMultiBulkCommand(scanner *bufio.Scanner) (arg CommandArg, err error) {
+func (r *RESPReader) ReadMultiBulkCommand() (arg *redigo.CommandArg, err error) {
 	var line []byte
 
 	// Read multi builk length
-	line = scanner.Bytes()
+	line = r.scanner.Bytes()
 	if len(line) > REDIS_INLINE_MAXSIZE {
 		err = errors.New("Protocol error: too big mbulk count string")
 		return
@@ -220,8 +316,8 @@ func (r *RESPReader) ReadMultiBulkCommand(scanner *bufio.Scanner) (arg CommandAr
 	var i int64
 
 	argv_len := int64(len(r.argv))
-	for i = 0; i < mbulklen && scanner.Scan(); i++ {
-		line = scanner.Bytes()
+	for i = 0; i < mbulklen && r.scanner.Scan(); i++ {
+		line = r.scanner.Bytes()
 		if len(line) > REDIS_INLINE_MAXSIZE {
 			err = errors.New("Protocol error: too big bulk count string")
 			return
@@ -236,11 +332,11 @@ func (r *RESPReader) ReadMultiBulkCommand(scanner *bufio.Scanner) (arg CommandAr
 			err = errors.New("Protocol error: invalid bulk length")
 			return
 		} else {
-			if !scanner.Scan() {
+			if !r.scanner.Scan() {
 				err = errors.New("Protocol error: no bulk data")
 				return
 			}
-			line = scanner.Bytes()
+			line = r.scanner.Bytes()
 			if int64(len(line)) != bulklen {
 				err = errors.New("Protocol error: bulk length doesn't match data length")
 				return
@@ -257,7 +353,6 @@ func (r *RESPReader) ReadMultiBulkCommand(scanner *bufio.Scanner) (arg CommandAr
 		return
 	}
 
-	arg.Argc = int(mbulklen)
-	arg.Argv = r.argv
+	arg = &redigo.CommandArg{Argc: int(mbulklen), Argv: r.argv}
 	return
 }

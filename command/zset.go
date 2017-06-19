@@ -4,6 +4,7 @@ import (
 	"bytes"
 
 	"github.com/SteveZhangBit/redigo"
+	"github.com/SteveZhangBit/redigo/protocol"
 	"github.com/SteveZhangBit/redigo/rtype"
 	"github.com/SteveZhangBit/redigo/rtype/rstring"
 	"github.com/SteveZhangBit/redigo/rtype/zset"
@@ -13,7 +14,7 @@ import (
  * Sorted set commands
  *----------------------------------------------------------------------------*/
 
-func ZADDCommand(c redigo.CommandArg) {
+func ZADDCommand(c *redigo.CommandArg) {
 	var z rtype.ZSet
 
 	/* TODO: Parse options. At the end 'scoreidx' is set to the argument position
@@ -21,7 +22,7 @@ func ZADDCommand(c redigo.CommandArg) {
 	scoreidx := 2
 	elements := c.Argc - scoreidx
 	if elements%2 != 0 {
-		c.AddReply(redigo.SyntaxErr)
+		c.AddReply(protocol.SyntaxErr)
 		return
 	}
 	elements /= 2
@@ -45,7 +46,7 @@ func ZADDCommand(c redigo.CommandArg) {
 	} else {
 		var ok bool
 		if z, ok = o.(rtype.ZSet); !ok {
-			c.AddReply(redigo.WrongTypeErr)
+			c.AddReply(protocol.WrongTypeErr)
 			return
 		}
 	}
@@ -78,18 +79,18 @@ func ZADDCommand(c redigo.CommandArg) {
 	}
 }
 
-func ZINCRBYCommand(c redigo.CommandArg) {
+func ZINCRBYCommand(c *redigo.CommandArg) {
 
 }
 
-func ZREMCommand(c redigo.CommandArg) {
+func ZREMCommand(c *redigo.CommandArg) {
 	var z rtype.ZSet
 
 	var ok bool
-	if o := c.LookupKeyWriteOrReply(c.Argv[1], redigo.CZero); o == nil {
+	if o := c.LookupKeyWriteOrReply(c.Argv[1], protocol.CZero); o == nil {
 		return
 	} else if z, ok = o.(rtype.ZSet); !ok {
-		c.AddReply(redigo.WrongTypeErr)
+		c.AddReply(protocol.WrongTypeErr)
 		return
 	}
 
@@ -119,27 +120,27 @@ func ZREMCommand(c redigo.CommandArg) {
 	c.AddReplyInt64(deleted)
 }
 
-func ZREMRANGEBYRANKCommand(c redigo.CommandArg) {
+func ZREMRANGEBYRANKCommand(c *redigo.CommandArg) {
 
 }
 
-func ZREMRANGEBYSCORECommand(c redigo.CommandArg) {
+func ZREMRANGEBYSCORECommand(c *redigo.CommandArg) {
 
 }
 
-func ZREMRANGEBYLEXCommand(c redigo.CommandArg) {
+func ZREMRANGEBYLEXCommand(c *redigo.CommandArg) {
 
 }
 
-func ZUNIONSTORECommand(c redigo.CommandArg) {
+func ZUNIONSTORECommand(c *redigo.CommandArg) {
 
 }
 
-func ZINTERSTORECommand(c redigo.CommandArg) {
+func ZINTERSTORECommand(c *redigo.CommandArg) {
 
 }
 
-func zrange(c redigo.CommandArg, reverse bool) {
+func zrange(c *redigo.CommandArg, reverse bool) {
 	var z rtype.ZSet
 	var start, end int
 	var withscores bool
@@ -157,15 +158,15 @@ func zrange(c redigo.CommandArg, reverse bool) {
 	if c.Argc == 5 && bytes.Equal(c.Argv[4], []byte("withscores")) {
 		withscores = true
 	} else if c.Argc >= 5 {
-		c.AddReply(redigo.WrongTypeErr)
+		c.AddReply(protocol.WrongTypeErr)
 		return
 	}
 
 	var ok bool
-	if o := c.LookupKeyReadOrReply(c.Argv[1], redigo.EmptyMultiBulk); o == nil {
+	if o := c.LookupKeyReadOrReply(c.Argv[1], protocol.EmptyMultiBulk); o == nil {
 		return
 	} else if z, ok = o.(rtype.ZSet); !ok {
-		c.AddReply(redigo.WrongTypeErr)
+		c.AddReply(protocol.WrongTypeErr)
 		return
 	}
 
@@ -184,7 +185,7 @@ func zrange(c redigo.CommandArg, reverse bool) {
 	/* Invariant: start >= 0, so this test will be true when end < 0.
 	 * The range is empty when start > end or start >= length. */
 	if start > end || start >= length {
-		c.AddReply(redigo.EmptyMultiBulk)
+		c.AddReply(protocol.EmptyMultiBulk)
 		return
 	}
 	if end >= length {
@@ -225,78 +226,78 @@ func zrange(c redigo.CommandArg, reverse bool) {
 	}
 }
 
-func ZRANGECommand(c redigo.CommandArg) {
+func ZRANGECommand(c *redigo.CommandArg) {
 	zrange(c, false)
 }
 
-func ZREVRANGECommand(c redigo.CommandArg) {
+func ZREVRANGECommand(c *redigo.CommandArg) {
 	zrange(c, true)
 }
 
-func zrangescore(c redigo.CommandArg, reverse bool) {
+func zrangescore(c *redigo.CommandArg, reverse bool) {
 
 }
 
-func ZRANGEBYSCORECommand(c redigo.CommandArg) {
+func ZRANGEBYSCORECommand(c *redigo.CommandArg) {
 
 }
 
-func ZREVRANGEBYSCORECommand(c redigo.CommandArg) {
+func ZREVRANGEBYSCORECommand(c *redigo.CommandArg) {
 
 }
 
-func ZCOUNTCommand(c redigo.CommandArg) {
+func ZCOUNTCommand(c *redigo.CommandArg) {
 
 }
 
-func ZLEXCOUNTCommand(c redigo.CommandArg) {
+func ZLEXCOUNTCommand(c *redigo.CommandArg) {
 
 }
 
-func ZRANGEBYLEXCommand(c redigo.CommandArg) {
+func ZRANGEBYLEXCommand(c *redigo.CommandArg) {
 
 }
 
-func ZREVRANGEBYLEXCommand(c redigo.CommandArg) {
+func ZREVRANGEBYLEXCommand(c *redigo.CommandArg) {
 
 }
 
-func ZCARDCommand(c redigo.CommandArg) {
-	if o := c.LookupKeyReadOrReply(c.Argv[1], redigo.CZero); o != nil {
+func ZCARDCommand(c *redigo.CommandArg) {
+	if o := c.LookupKeyReadOrReply(c.Argv[1], protocol.CZero); o != nil {
 		if z, ok := o.(rtype.ZSet); !ok {
-			c.AddReply(redigo.WrongTypeErr)
+			c.AddReply(protocol.WrongTypeErr)
 		} else {
 			c.AddReplyInt64(int64(z.Len()))
 		}
 	}
 }
 
-func ZSCORECommand(c redigo.CommandArg) {
+func ZSCORECommand(c *redigo.CommandArg) {
 	var z rtype.ZSet
 
 	var ok bool
-	if o := c.LookupKeyReadOrReply(c.Argv[1], redigo.NullBulk); o == nil {
+	if o := c.LookupKeyReadOrReply(c.Argv[1], protocol.NullBulk); o == nil {
 		return
 	} else if z, ok = o.(rtype.ZSet); !ok {
-		c.AddReply(redigo.WrongTypeErr)
+		c.AddReply(protocol.WrongTypeErr)
 		return
 	}
 
 	if score, ok := z.Get(rstring.New(c.Argv[2])); ok {
 		c.AddReplyFloat64(score)
 	} else {
-		c.AddReply(redigo.NullBulk)
+		c.AddReply(protocol.NullBulk)
 	}
 }
 
-func zrank(c redigo.CommandArg, reverse bool) {
+func zrank(c *redigo.CommandArg, reverse bool) {
 	var z rtype.ZSet
 
 	var ok bool
-	if o := c.LookupKeyReadOrReply(c.Argv[1], redigo.NullBulk); o == nil {
+	if o := c.LookupKeyReadOrReply(c.Argv[1], protocol.NullBulk); o == nil {
 		return
 	} else if z, ok = o.(rtype.ZSet); !ok {
-		c.AddReply(redigo.WrongTypeErr)
+		c.AddReply(protocol.WrongTypeErr)
 		return
 	}
 
@@ -310,18 +311,18 @@ func zrank(c redigo.CommandArg, reverse bool) {
 			c.AddReplyInt64(int64(rank - 1))
 		}
 	} else {
-		c.AddReply(redigo.NullBulk)
+		c.AddReply(protocol.NullBulk)
 	}
 }
 
-func ZRANKCommand(c redigo.CommandArg) {
+func ZRANKCommand(c *redigo.CommandArg) {
 	zrank(c, false)
 }
 
-func ZREVRANKCommand(c redigo.CommandArg) {
+func ZREVRANKCommand(c *redigo.CommandArg) {
 	zrank(c, true)
 }
 
-func ZSCANCommand(c redigo.CommandArg) {
+func ZSCANCommand(c *redigo.CommandArg) {
 
 }

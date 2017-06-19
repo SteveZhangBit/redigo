@@ -2,12 +2,13 @@ package command
 
 import (
 	"github.com/SteveZhangBit/redigo"
+	"github.com/SteveZhangBit/redigo/protocol"
 	"github.com/SteveZhangBit/redigo/rtype"
 	"github.com/SteveZhangBit/redigo/rtype/rstring"
 	"github.com/SteveZhangBit/redigo/rtype/set"
 )
 
-func SADDCommand(c redigo.CommandArg) {
+func SADDCommand(c *redigo.CommandArg) {
 	var s rtype.Set
 
 	if o := c.DB().LookupKeyWrite(c.Argv[1]); o == nil {
@@ -16,7 +17,7 @@ func SADDCommand(c redigo.CommandArg) {
 	} else {
 		var ok bool
 		if s, ok = o.(rtype.Set); !ok {
-			c.AddReply(redigo.WrongTypeErr)
+			c.AddReply(protocol.WrongTypeErr)
 			return
 		}
 	}
@@ -35,14 +36,14 @@ func SADDCommand(c redigo.CommandArg) {
 	c.AddReplyInt64(int64(added))
 }
 
-func SREMCommand(c redigo.CommandArg) {
+func SREMCommand(c *redigo.CommandArg) {
 	var s rtype.Set
 
 	var ok bool
-	if o := c.LookupKeyWriteOrReply(c.Argv[1], redigo.CZero); o == nil {
+	if o := c.LookupKeyWriteOrReply(c.Argv[1], protocol.CZero); o == nil {
 		return
 	} else if s, ok = o.(rtype.Set); !ok {
-		c.AddReply(redigo.WrongTypeErr)
+		c.AddReply(protocol.WrongTypeErr)
 		return
 	}
 
@@ -69,46 +70,46 @@ func SREMCommand(c redigo.CommandArg) {
 	c.AddReplyInt64(int64(deleted))
 }
 
-func SMOVECommand(c redigo.CommandArg) {
+func SMOVECommand(c *redigo.CommandArg) {
 
 }
 
-func SISMEMBERCommand(c redigo.CommandArg) {
+func SISMEMBERCommand(c *redigo.CommandArg) {
 	var s rtype.Set
 
 	var ok bool
-	if o := c.LookupKeyReadOrReply(c.Argv[1], redigo.CZero); o == nil {
+	if o := c.LookupKeyReadOrReply(c.Argv[1], protocol.CZero); o == nil {
 		return
 	} else if s, ok = o.(rtype.Set); !ok {
-		c.AddReply(redigo.WrongTypeErr)
+		c.AddReply(protocol.WrongTypeErr)
 		return
 	}
 
 	if s.IsMember(rstring.New(c.Argv[2])) {
-		c.AddReply(redigo.COne)
+		c.AddReply(protocol.COne)
 	} else {
-		c.AddReply(redigo.CZero)
+		c.AddReply(protocol.CZero)
 	}
 }
 
-func SCARDCommand(c redigo.CommandArg) {
-	if o := c.LookupKeyReadOrReply(c.Argv[1], redigo.CZero); o != nil {
+func SCARDCommand(c *redigo.CommandArg) {
+	if o := c.LookupKeyReadOrReply(c.Argv[1], protocol.CZero); o != nil {
 		if s, ok := o.(rtype.Set); !ok {
-			c.AddReply(redigo.WrongTypeErr)
+			c.AddReply(protocol.WrongTypeErr)
 		} else {
 			c.AddReplyInt64(int64(s.Size()))
 		}
 	}
 }
 
-func SPOPCommand(c redigo.CommandArg) {
+func SPOPCommand(c *redigo.CommandArg) {
 	var s rtype.Set
 
 	var ok bool
-	if o := c.LookupKeyWriteOrReply(c.Argv[1], redigo.CZero); o == nil {
+	if o := c.LookupKeyWriteOrReply(c.Argv[1], protocol.CZero); o == nil {
 		return
 	} else if s, ok = o.(rtype.Set); !ok {
-		c.AddReply(redigo.WrongTypeErr)
+		c.AddReply(protocol.WrongTypeErr)
 		return
 	}
 
@@ -127,34 +128,34 @@ func SPOPCommand(c redigo.CommandArg) {
 	c.Server().AddDirty(1)
 }
 
-func SRANDMEMBERCommand(c redigo.CommandArg) {
+func SRANDMEMBERCommand(c *redigo.CommandArg) {
 
 }
 
-func SINTERCommand(c redigo.CommandArg) {
+func SINTERCommand(c *redigo.CommandArg) {
 
 }
 
-func SINTERSTORECommand(c redigo.CommandArg) {
+func SINTERSTORECommand(c *redigo.CommandArg) {
 
 }
 
-func SUNIONCommand(c redigo.CommandArg) {
+func SUNIONCommand(c *redigo.CommandArg) {
 
 }
 
-func SUNIONSTORECommand(c redigo.CommandArg) {
+func SUNIONSTORECommand(c *redigo.CommandArg) {
 
 }
 
-func SDIFFCommand(c redigo.CommandArg) {
+func SDIFFCommand(c *redigo.CommandArg) {
 
 }
 
-func SDIFFSTORECommand(c redigo.CommandArg) {
+func SDIFFSTORECommand(c *redigo.CommandArg) {
 
 }
 
-func SSCANCommand(c redigo.CommandArg) {
+func SSCANCommand(c *redigo.CommandArg) {
 
 }

@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/SteveZhangBit/redigo"
+	"github.com/SteveZhangBit/redigo/protocol"
+	"io"
 )
 
 // Client flags
@@ -32,8 +34,8 @@ const (
 )
 
 type RedigoClient struct {
-	*redigo.RESPWriter
-	*redigo.RESPReader
+	protocol.Writer
+	protocol.Reader
 
 	*RedigoPubSub
 
@@ -60,8 +62,8 @@ func NewClient() *RedigoClient {
 		bpop:    &ClientBlockState{Keys: make(map[string]struct{})},
 		blocked: make(chan struct{}),
 	}
-	c.RESPWriter = redigo.NewRESPWriter(c)
-	c.RESPReader = redigo.NewRESPReader()
+	c.Writer = protocol.NewRESPWriter(c.conn)
+	c.Reader = protocol.NewRESPReader(c.conn)
 
 	return c
 }
@@ -90,59 +92,23 @@ func (r *RedigoClient) init() {
 	go r.readNextCommand()
 }
 
-func (r *RedigoClient) close() {
+func (r *RedigoClient) Close() error {
 	r.server.RedigoLog(REDIS_DEBUG, "Closing connection on: %s", r.conn.RemoteAddr())
-	r.conn.Close()
 	r.server.delClient <- r
-}
-
-func (r *RedigoClient) Write(x []byte) {
-	if _, err := r.outwriter.Write(x); err != nil {
-		r.server.RedigoLog(REDIS_VERBOSE, "Error writing to reply buffer: %s", err)
-		r.close()
-	} else if r.Flags&REDIS_CLOSE_AFTER_REPLY > 0 {
-		r.close()
-	}
-}
-
-func (r *RedigoClient) WriteByte(x byte) {
-	if err := r.outwriter.WriteByte(x); err != nil {
-		r.server.RedigoLog(REDIS_VERBOSE, "Error writing to reply buffer: %s", err)
-		r.close()
-	} else if r.Flags&REDIS_CLOSE_AFTER_REPLY > 0 {
-		r.close()
-	}
-}
-
-func (r *RedigoClient) WriteString(x string) {
-	if _, err := r.outwriter.WriteString(x); err != nil {
-		r.server.RedigoLog(REDIS_VERBOSE, "Error writing to reply buffer: %s", err)
-		r.close()
-	} else if r.Flags&REDIS_CLOSE_AFTER_REPLY > 0 {
-		r.close()
-	}
-}
-
-func (r *RedigoClient) Flush() {
-	if err := r.outwriter.Flush(); err != nil {
-		r.server.RedigoLog(REDIS_VERBOSE, "Error writing to client: %s", err)
-		r.close()
-	}
+	return r.conn.Close()
 }
 
 func (r *RedigoClient) readNextCommand() {
-	var line []byte
-	var arg redigo.CommandArg
+	var arg *redigo.CommandArg
 	var err error
 
-	scanner := bufio.NewScanner(r.conn)
 	for {
 		// If the client is set to be blocked
 		if r.Flags&REDIS_BLOCKED > 0 {
 			if r.bpop.Timeout > 0 {
 				select {
 				case <-time.After(r.bpop.Timeout):
-					r.AddReply(redigo.NullMultiBulk)
+					r.AddReply(protocol.NullMultiBulk)
 					r.unblock(false)
 				case <-r.blocked:
 				}
@@ -151,29 +117,25 @@ func (r *RedigoClient) readNextCommand() {
 			}
 		}
 
-		if !scanner.Scan() {
+		arg, err = r.Read()
+		if err == io.EOF {
 			break
-		}
-		line = scanner.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-
-		if line[0] != '*' {
-			arg, err = r.ReadInlineCommand(line)
-		} else {
-			arg, err = r.ReadMultiBulkCommand(scanner)
-		}
-
-		if err != nil {
+		} else if err != nil {
 			r.AddReplyError(err.Error())
 			r.setProtocolError()
 		} else {
 			arg.Client = r
 			r.server.processCommand(arg)
+
+			if err = r.Flush(); err != nil {
+				r.server.RedigoLog(REDIS_VERBOSE, "Error writing to client: %s", err)
+				break
+			} else if r.Flags&REDIS_CLOSE_AFTER_REPLY > 0 {
+				break
+			}
 		}
 	}
-	r.close()
+	r.Close()
 }
 
 func (r *RedigoClient) setProtocolError() {

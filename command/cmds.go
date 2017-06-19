@@ -5,46 +5,47 @@ import (
 	"os"
 
 	"github.com/SteveZhangBit/redigo"
+	"github.com/SteveZhangBit/redigo/protocol"
 )
 
 /*============================== client commands ====================================*/
-func CLIENTCommand(c redigo.CommandArg) {
+func CLIENTCommand(c *redigo.CommandArg) {
 }
 
 /*================================= Server Side Commands ===================================== */
 
-func AUTHCommand(c redigo.CommandArg) {
+func AUTHCommand(c *redigo.CommandArg) {
 
 }
 
-func PINGCommand(c redigo.CommandArg) {
+func PINGCommand(c *redigo.CommandArg) {
 	if c.Argc > 2 {
 		c.AddReplyError(fmt.Sprintf("wrong number of arguments for '%s' command", c.Argv[0]))
 		return
 	}
 
 	if c.Argc == 1 {
-		c.AddReply(redigo.Pong)
+		c.AddReply(protocol.Pong)
 	} else {
 		c.AddReplyBulk(c.Argv[1])
 	}
 }
 
-func ECHOCommand(c redigo.CommandArg) {
+func ECHOCommand(c *redigo.CommandArg) {
 
 }
 
-func TIMECommand(c redigo.CommandArg) {
+func TIMECommand(c *redigo.CommandArg) {
 
 }
 
-func COMMANDCommand(c redigo.CommandArg) {
+func COMMANDCommand(c *redigo.CommandArg) {
 
 }
 
-func SHUTDOWNCommand(c redigo.CommandArg) {
+func SHUTDOWNCommand(c *redigo.CommandArg) {
 	if c.Argc > 2 {
-		c.AddReply(redigo.SyntaxErr)
+		c.AddReply(protocol.SyntaxErr)
 		return
 	}
 	/* When SHUTDOWN is called while the server is loading a dataset in

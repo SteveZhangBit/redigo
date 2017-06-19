@@ -6,11 +6,12 @@ import (
 	"strings"
 
 	"github.com/SteveZhangBit/redigo"
+	"github.com/SteveZhangBit/redigo/protocol"
 	"github.com/SteveZhangBit/redigo/rtype"
 	"github.com/SteveZhangBit/redigo/rtype/rstring"
 )
 
-func GetInt64FromStringOrReply(c redigo.CommandArg, o rtype.String, msg string) (x int64, ok bool) {
+func GetInt64FromStringOrReply(c *redigo.CommandArg, o rtype.String, msg string) (x int64, ok bool) {
 	switch str := o.(type) {
 	case nil:
 		return 0, true
@@ -29,7 +30,7 @@ func GetInt64FromStringOrReply(c redigo.CommandArg, o rtype.String, msg string) 
 	return
 }
 
-func GetFloat64FromStringOrReply(c redigo.CommandArg, o rtype.String, msg string) (x float64, ok bool) {
+func GetFloat64FromStringOrReply(c *redigo.CommandArg, o rtype.String, msg string) (x float64, ok bool) {
 	switch str := o.(type) {
 	case nil:
 		return 0.0, true
@@ -54,7 +55,7 @@ func GetFloat64FromStringOrReply(c redigo.CommandArg, o rtype.String, msg string
 	return
 }
 
-func CheckStringlength(c redigo.CommandArg, size int64) bool {
+func CheckStringlength(c *redigo.CommandArg, size int64) bool {
 	if size > 512*1024*1024 {
 		c.AddReplyError("string exceeds maximum allowed size (512MB)")
 		return false
@@ -79,13 +80,13 @@ const (
  * XX -- Only set the key if it already exist.
  *
  * TODO: Currently, we only implement the very basic function of SET command. */
-func rstringSet(c redigo.CommandArg, flags int, okReply, abortReply []byte) {
+func rstringSet(c *redigo.CommandArg, flags int, okReply, abortReply []byte) {
 	if (flags&REDIS_SET_NX > 0 && c.DB().LookupKeyWrite(c.Argv[1]) != nil) ||
 		(flags&REDIS_SET_XX > 0 && c.DB().LookupKeyWrite(c.Argv[1]) == nil) {
 		if len(abortReply) != 0 {
 			c.AddReply(abortReply)
 		} else {
-			c.AddReply(redigo.NullBulk)
+			c.AddReply(protocol.NullBulk)
 		}
 		return
 	}
@@ -96,11 +97,11 @@ func rstringSet(c redigo.CommandArg, flags int, okReply, abortReply []byte) {
 	if len(okReply) != 0 {
 		c.AddReply(okReply)
 	} else {
-		c.AddReply(redigo.OK)
+		c.AddReply(protocol.OK)
 	}
 }
 
-func SETCommand(c redigo.CommandArg) {
+func SETCommand(c *redigo.CommandArg) {
 	flags := REDIS_SET_NO_FLAGS
 
 	for j := 3; j < c.Argc; j++ {
@@ -116,7 +117,7 @@ func SETCommand(c redigo.CommandArg) {
 		} else if a == "xx" {
 			flags |= REDIS_SET_XX
 		} else {
-			c.AddReply(redigo.SyntaxErr)
+			c.AddReply(protocol.SyntaxErr)
 			return
 		}
 	}
@@ -124,23 +125,23 @@ func SETCommand(c redigo.CommandArg) {
 	rstringSet(c, flags, nil, nil)
 }
 
-func SETNXCommand(c redigo.CommandArg) {
-	rstringSet(c, REDIS_SET_NX, redigo.COne, redigo.CZero)
+func SETNXCommand(c *redigo.CommandArg) {
+	rstringSet(c, REDIS_SET_NX, protocol.COne, protocol.CZero)
 }
 
-func SETEXCommand(c redigo.CommandArg) {
-
-}
-
-func PSETEXCommand(c redigo.CommandArg) {
+func SETEXCommand(c *redigo.CommandArg) {
 
 }
 
-func rstringGet(c redigo.CommandArg) bool {
-	if o := c.LookupKeyReadOrReply(c.Argv[1], redigo.NullBulk); o == nil {
+func PSETEXCommand(c *redigo.CommandArg) {
+
+}
+
+func rstringGet(c *redigo.CommandArg) bool {
+	if o := c.LookupKeyReadOrReply(c.Argv[1], protocol.NullBulk); o == nil {
 		return true
 	} else if str, ok := o.(rtype.String); !ok {
-		c.AddReply(redigo.WrongTypeErr)
+		c.AddReply(protocol.WrongTypeErr)
 		return false
 	} else {
 		c.AddReplyBulk(str.Bytes())
@@ -148,11 +149,11 @@ func rstringGet(c redigo.CommandArg) bool {
 	}
 }
 
-func GETCommand(c redigo.CommandArg) {
+func GETCommand(c *redigo.CommandArg) {
 	rstringGet(c)
 }
 
-func GETSETCommand(c redigo.CommandArg) {
+func GETSETCommand(c *redigo.CommandArg) {
 	if rstringGet(c) {
 		c.DB().SetKeyPersist(c.Argv[1], rstring.New(c.Argv[2]))
 		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_STRING, "set", c.Argv[1], c.DB().GetID())
@@ -160,22 +161,22 @@ func GETSETCommand(c redigo.CommandArg) {
 	}
 }
 
-func SETRANGECommand(c redigo.CommandArg) {
+func SETRANGECommand(c *redigo.CommandArg) {
 
 }
 
-func GETRANGECommand(c redigo.CommandArg) {
+func GETRANGECommand(c *redigo.CommandArg) {
 
 }
 
-func MGETCommand(c redigo.CommandArg) {
+func MGETCommand(c *redigo.CommandArg) {
 	c.AddReplyMultiBulkLen(c.Argc - 1)
 	for i := 1; i < c.Argc; i++ {
 		if o := c.DB().LookupKeyRead(c.Argv[i]); o == nil {
-			c.AddReply(redigo.NullBulk)
+			c.AddReply(protocol.NullBulk)
 		} else {
 			if val, ok := o.(rtype.String); !ok {
-				c.AddReply(redigo.NullBulk)
+				c.AddReply(protocol.NullBulk)
 			} else {
 				c.AddReplyBulk(val.Bytes())
 			}
@@ -183,7 +184,7 @@ func MGETCommand(c redigo.CommandArg) {
 	}
 }
 
-func rstringmset(c redigo.CommandArg, nx bool) {
+func rstringmset(c *redigo.CommandArg, nx bool) {
 	if c.Argc%2 == 0 {
 		c.AddReplyError("wrong number of arguments for MSET")
 		return
@@ -198,7 +199,7 @@ func rstringmset(c redigo.CommandArg, nx bool) {
 			}
 		}
 		if busykeys {
-			c.AddReply(redigo.CZero)
+			c.AddReply(protocol.CZero)
 			return
 		}
 	}
@@ -209,27 +210,27 @@ func rstringmset(c redigo.CommandArg, nx bool) {
 	}
 	c.Server().AddDirty((c.Argc - 1) / 2)
 	if nx {
-		c.AddReply(redigo.COne)
+		c.AddReply(protocol.COne)
 	} else {
-		c.AddReply(redigo.OK)
+		c.AddReply(protocol.OK)
 	}
 }
 
-func MSETCommand(c redigo.CommandArg) {
+func MSETCommand(c *redigo.CommandArg) {
 	rstringmset(c, false)
 }
 
-func MSETNXCommand(c redigo.CommandArg) {
+func MSETNXCommand(c *redigo.CommandArg) {
 	rstringmset(c, true)
 }
 
-func INCRBYFLOATCommand(c redigo.CommandArg) {
+func INCRBYFLOATCommand(c *redigo.CommandArg) {
 	var str rtype.String
 
 	var ok bool
 	o := c.DB().LookupKeyWrite(c.Argv[1])
 	if str, ok = o.(rtype.String); o != nil && !ok {
-		c.AddReply(redigo.WrongTypeErr)
+		c.AddReply(protocol.WrongTypeErr)
 		return
 	}
 
@@ -262,13 +263,13 @@ func INCRBYFLOATCommand(c redigo.CommandArg) {
 	}
 }
 
-func rstringIncrDecr(c redigo.CommandArg, incr int64) {
+func rstringIncrDecr(c *redigo.CommandArg, incr int64) {
 	var str rtype.String
 
 	var ok bool
 	o := c.DB().LookupKeyWrite(c.Argv[1])
 	if str, ok = o.(rtype.String); o != nil && !ok {
-		c.AddReply(redigo.WrongTypeErr)
+		c.AddReply(protocol.WrongTypeErr)
 		return
 	}
 
@@ -297,27 +298,27 @@ func rstringIncrDecr(c redigo.CommandArg, incr int64) {
 	}
 }
 
-func INCRCommand(c redigo.CommandArg) {
+func INCRCommand(c *redigo.CommandArg) {
 	rstringIncrDecr(c, 1)
 }
 
-func DECRCommand(c redigo.CommandArg) {
+func DECRCommand(c *redigo.CommandArg) {
 	rstringIncrDecr(c, -1)
 }
 
-func INCRBYCommand(c redigo.CommandArg) {
+func INCRBYCommand(c *redigo.CommandArg) {
 	if incr, ok := GetInt64FromStringOrReply(c, rstring.New(c.Argv[2]), ""); ok {
 		rstringIncrDecr(c, incr)
 	}
 }
 
-func DECRBYCommand(c redigo.CommandArg) {
+func DECRBYCommand(c *redigo.CommandArg) {
 	if incr, ok := GetInt64FromStringOrReply(c, rstring.New(c.Argv[2]), ""); ok {
 		rstringIncrDecr(c, -incr)
 	}
 }
 
-func APPENDCommand(c redigo.CommandArg) {
+func APPENDCommand(c *redigo.CommandArg) {
 	var str rtype.String
 	var totallen int64
 
@@ -327,7 +328,7 @@ func APPENDCommand(c redigo.CommandArg) {
 		c.DB().Add(c.Argv[1], str)
 		totallen = str.Len()
 	} else if str, ok = o.(rtype.String); !ok {
-		c.AddReply(redigo.WrongTypeErr)
+		c.AddReply(protocol.WrongTypeErr)
 		return
 	} else {
 		totallen = str.Len() + int64(len(c.Argv[2]))
@@ -343,10 +344,10 @@ func APPENDCommand(c redigo.CommandArg) {
 	c.AddReplyInt64(totallen)
 }
 
-func STRLENCommand(c redigo.CommandArg) {
-	if o := c.LookupKeyReadOrReply(c.Argv[1], redigo.CZero); o != nil {
+func STRLENCommand(c *redigo.CommandArg) {
+	if o := c.LookupKeyReadOrReply(c.Argv[1], protocol.CZero); o != nil {
 		if str, ok := o.(rtype.String); !ok {
-			c.AddReply(redigo.WrongTypeErr)
+			c.AddReply(protocol.WrongTypeErr)
 		} else {
 			c.AddReplyInt64(str.Len())
 		}

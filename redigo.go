@@ -1,10 +1,9 @@
 package redigo
 
 import (
-	"bufio"
-	"fmt"
-	"strconv"
 	"time"
+
+	"github.com/SteveZhangBit/redigo/protocol"
 )
 
 const (
@@ -20,54 +19,11 @@ const (
 	REDIS_NOTIFY_GENERIC
 )
 
-const (
-	REDIS_SHARED_INTEGERS    = 10000
-	REDIS_SHARED_BULKHDR_LEN = 32
-)
-
-var (
-	CRLF           = []byte("\r\n")
-	OK             = []byte("+OK\r\n")
-	CZero          = []byte(":0\r\n")
-	COne           = []byte(":1\r\n")
-	CNegOne        = []byte(":-1\r\n")
-	NullBulk       = []byte("$-1\r\n")
-	NullMultiBulk  = []byte("*-1\r\n")
-	EmptyMultiBulk = []byte("*0\r\n")
-	Pong           = []byte("+PONG\r\n")
-	WrongTypeErr   = []byte("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n")
-	SyntaxErr      = []byte("-ERR syntax error\r\n")
-	NoKeyErr       = []byte("-ERR no such key\r\n")
-	OutOfRangeErr  = []byte("-ERR index out of range\r\n")
-	SameObjectErr  = []byte("-ERR source and destination objects are the same\r\n")
-)
-
-var (
-	SharedIntegers [][]byte
-	Sharedmbulkhdr [][]byte
-	Sharedbulkhdr  [][]byte
-)
-
-func init() {
-	SharedIntegers = make([][]byte, REDIS_SHARED_INTEGERS)
-	for i := 0; i < REDIS_SHARED_INTEGERS; i++ {
-		SharedIntegers[i] = []byte(strconv.Itoa(i))
-	}
-
-	Sharedmbulkhdr = make([][]byte, REDIS_SHARED_BULKHDR_LEN)
-	Sharedbulkhdr = make([][]byte, REDIS_SHARED_BULKHDR_LEN)
-	for i := 0; i < REDIS_SHARED_BULKHDR_LEN; i++ {
-		Sharedmbulkhdr[i] = []byte(fmt.Sprintf("*%d\r\n", i))
-		Sharedbulkhdr[i] = []byte(fmt.Sprintf("$%d\r\n", i))
-	}
-}
-
 /* With multiplexing we need to take per-client state.
  * Clients are taken in a linked list. */
 type Client interface {
-	ProtocolWriter
-	ProtocolReader
-
+	protocol.Reader
+	protocol.Writer
 	PubSub
 
 	DB() DB
@@ -78,30 +34,6 @@ type Client interface {
 	LookupKeyWriteOrReply(key []byte, reply []byte) interface{}
 
 	BlockForKeys(keys [][]byte, timeout time.Duration)
-}
-
-type Writer interface {
-	Write(b []byte)
-	WriteByte(x byte)
-	WriteString(s string)
-	Flush()
-}
-
-type ProtocolWriter interface {
-	AddReply(x []byte)
-	AddReplyByte(x byte)
-	AddReplyString(x string)
-	AddReplyInt64(x int64)
-	AddReplyFloat64(x float64)
-	AddReplyMultiBulkLen(x int)
-	AddReplyBulk(x []byte)
-	AddReplyError(msg string)
-	AddReplyStatus(msg string)
-}
-
-type ProtocolReader interface {
-	ReadInlineCommand(line []byte) (CommandArg, error)
-	ReadMultiBulkCommand(scanner *bufio.Scanner) (CommandArg, error)
 }
 
 type Server interface {

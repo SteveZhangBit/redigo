@@ -98,7 +98,7 @@ const (
  */
 type RedigoCommand struct {
 	Name         string
-	Proc         func(c redigo.CommandArg)
+	Proc         func(c *redigo.CommandArg)
 	Arity        int
 	SFlags       string
 	Flags        int
@@ -486,7 +486,7 @@ func (r *RedigoServer) RedigoLog(level int, fm string, objs ...interface{}) {
  * If 1 is returned the client is still alive and valid and
  * other operations can be performed by the caller. Otherwise
  * if 0 is returned the client was destroyed (i.e. after QUIT). */
-func (r *RedigoServer) processCommand(c redigo.CommandArg) bool {
+func (r *RedigoServer) processCommand(c *redigo.CommandArg) bool {
 	/* Now lookup the command and check ASAP about trivial error conditions
 	 * such as wrong arity, bad command name and so forth. */
 
@@ -507,7 +507,7 @@ func (r *RedigoServer) processCommand(c redigo.CommandArg) bool {
 	return true
 }
 
-func (r *RedigoServer) call(c redigo.CommandArg, cmd *RedigoCommand) {
+func (r *RedigoServer) call(c *redigo.CommandArg, cmd *RedigoCommand) {
 	// Lock
 	if cmd.Flags&REDIS_CMD_WRITE > 0 {
 		r.rwLock.Lock()

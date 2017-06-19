@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/SteveZhangBit/redigo"
+	"github.com/SteveZhangBit/redigo/protocol"
 	"github.com/SteveZhangBit/redigo/rtype"
 	"github.com/SteveZhangBit/redigo/rtype/list"
 	"github.com/SteveZhangBit/redigo/rtype/rstring"
@@ -13,14 +14,14 @@ import (
  * List Commands
  *----------------------------------------------------------------------------*/
 
-func listPush(c redigo.CommandArg, where int) {
+func listPush(c *redigo.CommandArg, where int) {
 	var l rtype.List
 	var pushed int
 
 	if o := c.DB().LookupKeyWrite(c.Argv[1]); o != nil {
 		var ok bool
 		if l, ok = o.(rtype.List); !ok {
-			c.AddReply(redigo.WrongTypeErr)
+			c.AddReply(protocol.WrongTypeErr)
 			return
 		}
 	} else {
@@ -50,23 +51,23 @@ func listPush(c redigo.CommandArg, where int) {
 	c.Server().AddDirty(pushed)
 }
 
-func LPUSHCommand(c redigo.CommandArg) {
+func LPUSHCommand(c *redigo.CommandArg) {
 	listPush(c, rtype.REDIS_LIST_HEAD)
 }
 
-func RPUSHCommand(c redigo.CommandArg) {
+func RPUSHCommand(c *redigo.CommandArg) {
 	listPush(c, rtype.REDIS_LIST_TAIL)
 }
 
-func listPushx(c redigo.CommandArg, ref rtype.String, val rtype.String, where int) {
+func listPushx(c *redigo.CommandArg, ref rtype.String, val rtype.String, where int) {
 	var l rtype.List
 	var inserted bool
 
 	var ok bool
-	if o := c.LookupKeyReadOrReply(c.Argv[1], redigo.CZero); o == nil {
+	if o := c.LookupKeyReadOrReply(c.Argv[1], protocol.CZero); o == nil {
 		return
 	} else if l, ok = o.(rtype.List); !ok {
-		c.AddReply(redigo.WrongTypeErr)
+		c.AddReply(protocol.WrongTypeErr)
 		return
 	}
 
@@ -94,7 +95,7 @@ func listPushx(c redigo.CommandArg, ref rtype.String, val rtype.String, where in
 			c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_LIST, "linsert", c.Argv[1], c.DB().GetID())
 			c.Server().AddDirty(1)
 		} else {
-			c.AddReply(redigo.CNegOne)
+			c.AddReply(protocol.CNegOne)
 			return
 		}
 	} else {
@@ -113,42 +114,42 @@ func listPushx(c redigo.CommandArg, ref rtype.String, val rtype.String, where in
 	c.AddReplyInt64(int64(l.Len()))
 }
 
-func LPUSHXCommand(c redigo.CommandArg) {
+func LPUSHXCommand(c *redigo.CommandArg) {
 	listPushx(c, nil, rstring.New(c.Argv[2]), rtype.REDIS_LIST_HEAD)
 }
 
-func RPUSHXCommand(c redigo.CommandArg) {
+func RPUSHXCommand(c *redigo.CommandArg) {
 	listPushx(c, nil, rstring.New(c.Argv[2]), rtype.REDIS_LIST_TAIL)
 }
 
-func LINSERTCommand(c redigo.CommandArg) {
+func LINSERTCommand(c *redigo.CommandArg) {
 	if string(c.Argv[2]) == "after" {
 		listPushx(c, rstring.New(c.Argv[3]), rstring.New(c.Argv[4]), rtype.REDIS_LIST_TAIL)
 	} else if string(c.Argv[2]) == "before" {
 		listPushx(c, rstring.New(c.Argv[3]), rstring.New(c.Argv[4]), rtype.REDIS_LIST_HEAD)
 	} else {
-		c.AddReply(redigo.SyntaxErr)
+		c.AddReply(protocol.SyntaxErr)
 	}
 }
 
-func LLENCommand(c redigo.CommandArg) {
-	if o := c.LookupKeyReadOrReply(c.Argv[1], redigo.CZero); o != nil {
+func LLENCommand(c *redigo.CommandArg) {
+	if o := c.LookupKeyReadOrReply(c.Argv[1], protocol.CZero); o != nil {
 		if l, ok := o.(rtype.List); !ok {
-			c.AddReply(redigo.WrongTypeErr)
+			c.AddReply(protocol.WrongTypeErr)
 		} else {
 			c.AddReplyInt64(int64(l.Len()))
 		}
 	}
 }
 
-func LINDEXCommand(c redigo.CommandArg) {
+func LINDEXCommand(c *redigo.CommandArg) {
 	var l rtype.List
 
 	var ok bool
-	if o := c.LookupKeyReadOrReply(c.Argv[1], redigo.NullBulk); o == nil {
+	if o := c.LookupKeyReadOrReply(c.Argv[1], protocol.NullBulk); o == nil {
 		return
 	} else if l, ok = o.(rtype.List); !ok {
-		c.AddReply(redigo.WrongTypeErr)
+		c.AddReply(protocol.WrongTypeErr)
 		return
 	}
 
@@ -157,20 +158,20 @@ func LINDEXCommand(c redigo.CommandArg) {
 		if e != nil {
 			c.AddReplyBulk(e.Value().Bytes())
 		} else {
-			c.AddReply(redigo.NullBulk)
+			c.AddReply(protocol.NullBulk)
 		}
 	}
 }
 
-func LSETCommand(c redigo.CommandArg) {
+func LSETCommand(c *redigo.CommandArg) {
 	var l rtype.List
 	var index int
 
 	var ok bool
-	if o := c.LookupKeyWriteOrReply(c.Argv[1], redigo.NoKeyErr); o == nil {
+	if o := c.LookupKeyWriteOrReply(c.Argv[1], protocol.NoKeyErr); o == nil {
 		return
 	} else if l, ok = o.(rtype.List); !ok {
-		c.AddReply(redigo.WrongTypeErr)
+		c.AddReply(protocol.WrongTypeErr)
 		return
 	}
 
@@ -183,23 +184,23 @@ func LSETCommand(c redigo.CommandArg) {
 	e := l.Index(index)
 	if e != nil {
 		e.SetValue(rstring.New(c.Argv[3]))
-		c.AddReply(redigo.OK)
+		c.AddReply(protocol.OK)
 		c.DB().SignalModifyKey(c.Argv[1])
 		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_LIST, "lset", c.Argv[1], c.DB().GetID())
 		c.Server().AddDirty(1)
 	} else {
-		c.AddReply(redigo.OutOfRangeErr)
+		c.AddReply(protocol.OutOfRangeErr)
 	}
 }
 
-func listPop(c redigo.CommandArg, where int) {
+func listPop(c *redigo.CommandArg, where int) {
 	var l rtype.List
 
 	var ok bool
-	if o := c.LookupKeyWriteOrReply(c.Argv[1], redigo.NullBulk); o == nil {
+	if o := c.LookupKeyWriteOrReply(c.Argv[1], protocol.NullBulk); o == nil {
 		return
 	} else if l, ok = o.(rtype.List); !ok {
-		c.AddReply(redigo.WrongTypeErr)
+		c.AddReply(protocol.WrongTypeErr)
 		return
 	}
 
@@ -213,7 +214,7 @@ func listPop(c redigo.CommandArg, where int) {
 		e = l.PopBack()
 	}
 	if e == nil {
-		c.AddReply(redigo.NullBulk)
+		c.AddReply(protocol.NullBulk)
 	} else {
 		c.AddReplyBulk(e.Value().Bytes())
 		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_LIST, event, c.Argv[1], c.DB().GetID())
@@ -226,15 +227,15 @@ func listPop(c redigo.CommandArg, where int) {
 	}
 }
 
-func LPOPCommand(c redigo.CommandArg) {
+func LPOPCommand(c *redigo.CommandArg) {
 	listPop(c, rtype.REDIS_LIST_HEAD)
 }
 
-func RPOPCommand(c redigo.CommandArg) {
+func RPOPCommand(c *redigo.CommandArg) {
 	listPop(c, rtype.REDIS_LIST_TAIL)
 }
 
-func LRANGECommand(c redigo.CommandArg) {
+func LRANGECommand(c *redigo.CommandArg) {
 	var l rtype.List
 	var start, end, llen, rangelen int
 
@@ -248,10 +249,10 @@ func LRANGECommand(c redigo.CommandArg) {
 	}
 
 	var ok bool
-	if o := c.LookupKeyReadOrReply(c.Argv[1], redigo.EmptyMultiBulk); o == nil {
+	if o := c.LookupKeyReadOrReply(c.Argv[1], protocol.EmptyMultiBulk); o == nil {
 		return
 	} else if l, ok = o.(rtype.List); !ok {
-		c.AddReplyError(string(redigo.WrongTypeErr))
+		c.AddReplyError(string(protocol.WrongTypeErr))
 		return
 	}
 	llen = l.Len()
@@ -270,7 +271,7 @@ func LRANGECommand(c redigo.CommandArg) {
 	/* Invariant: start >= 0, so this test will be true when end < 0.
 	 * The range is empty when start > end or start >= length. */
 	if start > end || start >= llen {
-		c.AddReply(redigo.EmptyMultiBulk)
+		c.AddReply(protocol.EmptyMultiBulk)
 		return
 	}
 	if end >= llen {
@@ -294,7 +295,7 @@ func LRANGECommand(c redigo.CommandArg) {
 	}
 }
 
-func LTRIMCommand(c redigo.CommandArg) {
+func LTRIMCommand(c *redigo.CommandArg) {
 	var l rtype.List
 	var start, end, llen int
 
@@ -308,10 +309,10 @@ func LTRIMCommand(c redigo.CommandArg) {
 	}
 
 	var ok bool
-	if o := c.LookupKeyWriteOrReply(c.Argv[1], redigo.OK); o == nil {
+	if o := c.LookupKeyWriteOrReply(c.Argv[1], protocol.OK); o == nil {
 		return
 	} else if l, ok = o.(rtype.List); !ok {
-		c.AddReply(redigo.WrongTypeErr)
+		c.AddReply(protocol.WrongTypeErr)
 		return
 	}
 	llen = l.Len()
@@ -358,7 +359,7 @@ func LTRIMCommand(c redigo.CommandArg) {
 	}
 	c.DB().SignalModifyKey(c.Argv[1])
 	c.Server().AddDirty(1)
-	c.AddReply(redigo.OK)
+	c.AddReply(protocol.OK)
 }
 
 /* Removes the first count occurrences of elements equal to value from the list stored at key. The count argument influences the operation in the following ways:
@@ -367,7 +368,7 @@ func LTRIMCommand(c redigo.CommandArg) {
  * count = 0: Remove all elements equal to value.
  * For example, LREM list -2 "hello" will remove the last two occurrences of "hello" in the list stored at list.
  * Note that non-existing keys are treated like empty lists, so when key does not exist, the command will always return 0.*/
-func LREMCommand(c redigo.CommandArg) {
+func LREMCommand(c *redigo.CommandArg) {
 	var l rtype.List
 	var toremove int
 
@@ -378,10 +379,10 @@ func LREMCommand(c redigo.CommandArg) {
 	}
 
 	var ok bool
-	if o := c.LookupKeyWriteOrReply(c.Argv[1], redigo.CZero); o == nil {
+	if o := c.LookupKeyWriteOrReply(c.Argv[1], protocol.CZero); o == nil {
 		return
 	} else if l, ok = o.(rtype.List); !ok {
-		c.AddReply(redigo.WrongTypeErr)
+		c.AddReply(protocol.WrongTypeErr)
 		return
 	}
 
@@ -425,7 +426,7 @@ func LREMCommand(c redigo.CommandArg) {
 	}
 }
 
-func RPOPLPUSHCommand(c redigo.CommandArg) {
+func RPOPLPUSHCommand(c *redigo.CommandArg) {
 
 }
 
@@ -448,7 +449,7 @@ func RPOPLPUSHCommand(c redigo.CommandArg) {
  *   to the number of elements we have in the ready list.
  */
 
-func GetTimeoutFromStringOrReply(c redigo.CommandArg, o rtype.String, unit time.Duration) (t time.Duration, ok bool) {
+func GetTimeoutFromStringOrReply(c *redigo.CommandArg, o rtype.String, unit time.Duration) (t time.Duration, ok bool) {
 	var x int64
 
 	if x, ok = GetInt64FromStringOrReply(c, o, "timeout is not an integer or out of range"); !ok {
@@ -465,7 +466,7 @@ func GetTimeoutFromStringOrReply(c redigo.CommandArg, o rtype.String, unit time.
 	return
 }
 
-func listBlockingPop(c redigo.CommandArg, where int) {
+func listBlockingPop(c *redigo.CommandArg, where int) {
 	var l rtype.List
 	var timeout time.Duration
 	var ok bool
@@ -477,7 +478,7 @@ func listBlockingPop(c redigo.CommandArg, where int) {
 	for i := 1; i < c.Argc-1; i++ {
 		if o := c.DB().LookupKeyWrite(c.Argv[i]); o != nil {
 			if l, ok = o.(rtype.List); !ok {
-				c.AddReply(redigo.WrongTypeErr)
+				c.AddReply(protocol.WrongTypeErr)
 				return
 			}
 			if l.Len() != 0 {
@@ -514,14 +515,14 @@ func listBlockingPop(c redigo.CommandArg, where int) {
 	c.Client.BlockForKeys(c.Argv[1:c.Argc-1], timeout)
 }
 
-func BLPOPCommand(c redigo.CommandArg) {
+func BLPOPCommand(c *redigo.CommandArg) {
 	listBlockingPop(c, rtype.REDIS_LIST_HEAD)
 }
 
-func BRPOPCommand(c redigo.CommandArg) {
+func BRPOPCommand(c *redigo.CommandArg) {
 	listBlockingPop(c, rtype.REDIS_LIST_TAIL)
 }
 
-func BRPOPLPUSHCommand(c redigo.CommandArg) {
+func BRPOPLPUSHCommand(c *redigo.CommandArg) {
 
 }

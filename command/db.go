@@ -4,6 +4,7 @@ import (
 	"bytes"
 
 	"github.com/SteveZhangBit/redigo"
+	"github.com/SteveZhangBit/redigo/protocol"
 	"github.com/SteveZhangBit/redigo/rtype"
 	"github.com/SteveZhangBit/redigo/rtype/rstring"
 	"github.com/SteveZhangBit/redigo/util"
@@ -13,15 +14,15 @@ import (
  * Type agnostic commands operating on the key space
  *----------------------------------------------------------------------------*/
 
-func FLUSHDBCommand(c redigo.CommandArg) {
+func FLUSHDBCommand(c *redigo.CommandArg) {
 
 }
 
-func FLUSHALLCommand(c redigo.CommandArg) {
+func FLUSHALLCommand(c *redigo.CommandArg) {
 
 }
 
-func DELCommand(c redigo.CommandArg) {
+func DELCommand(c *redigo.CommandArg) {
 	var deleted int64
 	for i := 0; i < c.Argc; i++ {
 		c.DB().ExpireIfNeed(c.Argv[i])
@@ -37,7 +38,7 @@ func DELCommand(c redigo.CommandArg) {
 
 /* EXISTS key1 key2 ... key_N.
  * Return value is the number of keys existing. */
-func EXISTSCommand(c redigo.CommandArg) {
+func EXISTSCommand(c *redigo.CommandArg) {
 	var count int64
 	for i := 1; i < c.Argc; i++ {
 		c.DB().ExpireIfNeed(c.Argv[i])
@@ -48,7 +49,7 @@ func EXISTSCommand(c redigo.CommandArg) {
 	c.AddReplyInt64(count)
 }
 
-func SELECTCommand(c redigo.CommandArg) {
+func SELECTCommand(c *redigo.CommandArg) {
 	var id int
 	if x, ok := GetInt64FromStringOrReply(c, rstring.New(c.Argv[1]), "invalid DB index"); !ok {
 		return
@@ -59,19 +60,19 @@ func SELECTCommand(c redigo.CommandArg) {
 	if c.SelectDB(id) {
 		c.AddReplyError("invalid DB index")
 	} else {
-		c.AddReply(redigo.OK)
+		c.AddReply(protocol.OK)
 	}
 }
 
-func RANDOMKEYCommand(c redigo.CommandArg) {
+func RANDOMKEYCommand(c *redigo.CommandArg) {
 	if key := c.DB().RandomKey(); len(key) == 0 {
-		c.AddReply(redigo.NullBulk)
+		c.AddReply(protocol.NullBulk)
 	} else {
 		c.AddReplyBulk(key)
 	}
 }
 
-func KEYSCommand(c redigo.CommandArg) {
+func KEYSCommand(c *redigo.CommandArg) {
 	var keys [][]byte
 
 	pattern := c.Argv[1]
@@ -88,19 +89,19 @@ func KEYSCommand(c redigo.CommandArg) {
 	}
 }
 
-func SCANCommand(c redigo.CommandArg) {
+func SCANCommand(c *redigo.CommandArg) {
 
 }
 
-func DBSIZECommand(c redigo.CommandArg) {
+func DBSIZECommand(c *redigo.CommandArg) {
 
 }
 
-func LASTSAVECommand(c redigo.CommandArg) {
+func LASTSAVECommand(c *redigo.CommandArg) {
 
 }
 
-func TYPECommand(c redigo.CommandArg) {
+func TYPECommand(c *redigo.CommandArg) {
 	var t string
 	if o := c.DB().LookupKeyRead(c.Argv[1]); o == nil {
 		t = "none"
@@ -123,23 +124,23 @@ func TYPECommand(c redigo.CommandArg) {
 	c.AddReplyStatus(t)
 }
 
-func renameGeneric(c redigo.CommandArg, nx bool) {
+func renameGeneric(c *redigo.CommandArg, nx bool) {
 	var o interface{}
 
 	// To use the same key as src and dst is probably an error
 	if bytes.Equal(c.Argv[1], c.Argv[2]) {
-		c.AddReply(redigo.SameObjectErr)
+		c.AddReply(protocol.SameObjectErr)
 		return
 	}
 
-	if o = c.LookupKeyWriteOrReply(c.Argv[1], redigo.NoKeyErr); o == nil {
+	if o = c.LookupKeyWriteOrReply(c.Argv[1], protocol.NoKeyErr); o == nil {
 		return
 	}
 
 	expire := c.DB().GetExpire(c.Argv[1])
 	if c.DB().LookupKeyWrite(c.Argv[2]) != nil {
 		if nx {
-			c.AddReply(redigo.CZero)
+			c.AddReply(protocol.CZero)
 			return
 		}
 		/* Overwrite: delete the old key before creating the new one
@@ -157,21 +158,21 @@ func renameGeneric(c redigo.CommandArg, nx bool) {
 	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "rename_to", c.Argv[2], c.DB().GetID())
 	c.Server().AddDirty(1)
 	if nx {
-		c.AddReply(redigo.COne)
+		c.AddReply(protocol.COne)
 	} else {
-		c.AddReply(redigo.OK)
+		c.AddReply(protocol.OK)
 	}
 }
 
-func RENAMECommand(c redigo.CommandArg) {
+func RENAMECommand(c *redigo.CommandArg) {
 	renameGeneric(c, false)
 }
 
-func RENAMENXCommand(c redigo.CommandArg) {
+func RENAMENXCommand(c *redigo.CommandArg) {
 	renameGeneric(c, true)
 }
 
-func MOVECommand(c redigo.CommandArg) {
+func MOVECommand(c *redigo.CommandArg) {
 
 }
 
@@ -179,30 +180,30 @@ func MOVECommand(c redigo.CommandArg) {
  * Expire commands
  *----------------------------------------------------------------------------*/
 
-func EXPIRECommand(c redigo.CommandArg) {
+func EXPIRECommand(c *redigo.CommandArg) {
 
 }
 
-func EXPIREATCommand(c redigo.CommandArg) {
+func EXPIREATCommand(c *redigo.CommandArg) {
 
 }
 
-func PEXPIRECommand(c redigo.CommandArg) {
+func PEXPIRECommand(c *redigo.CommandArg) {
 
 }
 
-func PEXPIREATCommand(c redigo.CommandArg) {
+func PEXPIREATCommand(c *redigo.CommandArg) {
 
 }
 
-func TTLCommand(c redigo.CommandArg) {
+func TTLCommand(c *redigo.CommandArg) {
 
 }
 
-func PTTLCommand(c redigo.CommandArg) {
+func PTTLCommand(c *redigo.CommandArg) {
 
 }
 
-func PERSISTCommand(c redigo.CommandArg) {
+func PERSISTCommand(c *redigo.CommandArg) {
 
 }
