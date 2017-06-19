@@ -6,6 +6,7 @@ import (
 	"github.com/SteveZhangBit/redigo"
 	"github.com/SteveZhangBit/redigo/rtype"
 	"github.com/SteveZhangBit/redigo/rtype/rstring"
+	"github.com/SteveZhangBit/redigo/util"
 )
 
 /*-----------------------------------------------------------------------------
@@ -77,7 +78,7 @@ func KEYSCommand(c redigo.CommandArg) {
 	isAllKeys := len(pattern) == 1 && pattern[0] == '*'
 	for key := range c.DB().GetDict() {
 		key_bytes := []byte(key)
-		if isAllKeys || redigo.MatchPattern(pattern, key_bytes, false) {
+		if isAllKeys || util.MatchPattern(pattern, key_bytes, false) {
 			keys = append(keys, key_bytes)
 		}
 	}

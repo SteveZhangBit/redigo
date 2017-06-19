@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"strconv"
 
-	"github.com/SteveZhangBit/redigo"
 	"github.com/SteveZhangBit/redigo/rtype"
+	"github.com/SteveZhangBit/redigo/util"
 )
 
 type BytesString struct {
@@ -58,7 +58,7 @@ func (i *IntString) Append(b []byte) rtype.String {
 func New(val []byte) rtype.String {
 	// Check whether can be convert to integer
 	if val[0] == '+' || val[0] == '-' || (val[0] >= '0' && val[0] <= '9') {
-		if x, ok := redigo.ParseInt(val, 10, 64); ok {
+		if x, ok := util.ParseInt(val, 10, 64); ok {
 			return &IntString{x}
 		}
 	}

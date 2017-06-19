@@ -13,6 +13,7 @@ import (
 	"github.com/SteveZhangBit/redigo"
 	"github.com/SteveZhangBit/redigo/command"
 	"github.com/SteveZhangBit/redigo/rtype"
+	"github.com/SteveZhangBit/redigo/util"
 )
 
 const (
@@ -489,7 +490,7 @@ func (r *RedigoServer) processCommand(c redigo.CommandArg) bool {
 	/* Now lookup the command and check ASAP about trivial error conditions
 	 * such as wrong arity, bad command name and so forth. */
 
-	cmd, ok := r.Commands[string(redigo.ToLower(c.Argv[0]))]
+	cmd, ok := r.Commands[string(util.ToLower(c.Argv[0]))]
 	c.Client.(*RedigoClient).lastcmd = cmd
 	if !ok {
 		c.AddReplyError(fmt.Sprintf("unknown command '%s'", string(c.Argv[0])))

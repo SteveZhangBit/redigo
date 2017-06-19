@@ -7,6 +7,7 @@ import (
 	"math"
 	"strconv"
 	"unicode"
+	"github.com/SteveZhangBit/redigo/util"
 )
 
 const (
@@ -209,7 +210,7 @@ func (r *RESPReader) ReadMultiBulkCommand(scanner *bufio.Scanner) (arg CommandAr
 
 	// Find out the multi bulk length.
 	var mbulklen int64
-	if x, ok := ParseInt(line[1:], 10, 64); !ok || x > 1024*1024 {
+	if x, ok := util.ParseInt(line[1:], 10, 64); !ok || x > 1024*1024 {
 		err = errors.New("Protocol error: invalid multibulk length")
 		return
 	} else {
@@ -231,7 +232,7 @@ func (r *RESPReader) ReadMultiBulkCommand(scanner *bufio.Scanner) (arg CommandAr
 			return
 		}
 
-		if bulklen, ok := ParseInt(line[1:], 10, 64); !ok || bulklen > 512*1024*1024 {
+		if bulklen, ok := util.ParseInt(line[1:], 10, 64); !ok || bulklen > 512*1024*1024 {
 			err = errors.New("Protocol error: invalid bulk length")
 			return
 		} else {
