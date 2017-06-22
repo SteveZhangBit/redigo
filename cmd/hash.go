@@ -1,4 +1,4 @@
-package command
+package cmd
 
 import (
 	"math"
@@ -15,9 +15,9 @@ import (
  *----------------------------------------------------------------------------*/
 
 func hashLookupWriteOrCreate(c *redigo.CommandArg, key []byte) (h rtype.HashMap) {
-	if o := c.DB().LookupKeyWrite(key); o == nil {
+	if o := c.DB.LookupKeyWrite(key); o == nil {
 		h = hash.New()
-		c.DB().Add(key, h)
+		c.DB.Add(key, h)
 	} else {
 		var ok bool
 		if h, ok = o.(rtype.HashMap); !ok {
@@ -38,9 +38,9 @@ func HSETCommand(c *redigo.CommandArg) {
 	} else {
 		c.AddReply(protocol.COne)
 	}
-	c.DB().SignalModifyKey(c.Argv[1])
-	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_HASH, "hset", c.Argv[1], c.DB().GetID())
-	c.Server().AddDirty(1)
+	c.DB.SignalModifyKey(c.Argv[1])
+	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_HASH, "hset", c.Argv[1], c.DB.ID)
+	c.Server.Dirty++
 }
 
 func HSETNXCommand(c *redigo.CommandArg) {
@@ -53,9 +53,9 @@ func HSETNXCommand(c *redigo.CommandArg) {
 	} else {
 		h.Set(c.Argv[2], rstring.New(c.Argv[3]))
 		c.AddReply(protocol.COne)
-		c.DB().SignalModifyKey(c.Argv[1])
-		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_HASH, "hset", c.Argv[1], c.DB().GetID())
-		c.Server().AddDirty(1)
+		c.DB.SignalModifyKey(c.Argv[1])
+		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_HASH, "hset", c.Argv[1], c.DB.ID)
+		c.Server.Dirty++
 	}
 }
 
@@ -72,9 +72,9 @@ func HMSETCommand(c *redigo.CommandArg) {
 		h.Set(c.Argv[i], rstring.New(c.Argv[i+1]))
 	}
 	c.AddReply(protocol.OK)
-	c.DB().SignalModifyKey(c.Argv[1])
-	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_HASH, "hset", c.Argv[1], c.DB().GetID())
-	c.Server().AddDirty(1)
+	c.DB.SignalModifyKey(c.Argv[1])
+	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_HASH, "hset", c.Argv[1], c.DB.ID)
+	c.Server.Dirty++
 }
 
 func HINCRBYCommand(c *redigo.CommandArg) {
@@ -102,9 +102,9 @@ func HINCRBYCommand(c *redigo.CommandArg) {
 	val += incr
 	h.Set(c.Argv[2], rstring.NewFromInt64(val))
 	c.AddReplyInt64(val)
-	c.DB().SignalModifyKey(c.Argv[1])
-	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_HASH, "hincrby", c.Argv[1], c.DB().GetID())
-	c.Server().AddDirty(1)
+	c.DB.SignalModifyKey(c.Argv[1])
+	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_HASH, "hincrby", c.Argv[1], c.DB.ID)
+	c.Server.Dirty++
 }
 
 func HINCRBYFLOATCommand(c *redigo.CommandArg) {
@@ -128,9 +128,9 @@ func HINCRBYFLOATCommand(c *redigo.CommandArg) {
 	str := rstring.NewFromFloat64(val)
 	h.Set(c.Argv[2], str)
 	c.AddReplyBulk(str.Bytes())
-	c.DB().SignalModifyKey(c.Argv[1])
-	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_HASH, "hincrbyfloat", c.Argv[1], c.DB().GetID())
-	c.Server().AddDirty(1)
+	c.DB.SignalModifyKey(c.Argv[1])
+	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_HASH, "hincrbyfloat", c.Argv[1], c.DB.ID)
+	c.Server.Dirty++
 
 	/* TODO: Always replicate HINCRBYFLOAT as an HSET command with the final value
 	 * in order to make sure that differences in float pricision or formatting
@@ -162,7 +162,7 @@ func HGETCommand(c *redigo.CommandArg) {
 func HMGETCommand(c *redigo.CommandArg) {
 	/* Don't abort when the key cannot be found. Non-existing keys are empty
 	 * hashes, where HMGET should respond with a series of null bulks. */
-	o := c.DB().LookupKeyRead(c.Argv[1])
+	o := c.DB.LookupKeyRead(c.Argv[1])
 	if h, ok := o.(rtype.HashMap); o == nil || ok {
 		c.AddReplyMultiBulkLen(c.Argc - 2)
 		for i := 2; i < c.Argc; i++ {
@@ -191,19 +191,19 @@ func HDELCommand(c *redigo.CommandArg) {
 			h.Delete(c.Argv[i])
 			deleted++
 			if h.Len() == 0 {
-				c.DB().Delete(c.Argv[1])
+				c.DB.Delete(c.Argv[1])
 				keyremoved = true
 				break
 			}
 		}
 	}
 	if deleted > 0 {
-		c.DB().SignalModifyKey(c.Argv[1])
-		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_HASH, "hdel", c.Argv[1], c.DB().GetID())
+		c.DB.SignalModifyKey(c.Argv[1])
+		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_HASH, "hdel", c.Argv[1], c.DB.ID)
 		if keyremoved {
-			c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB().GetID())
+			c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB.ID)
 		}
-		c.Server().AddDirty(deleted)
+		c.Server.Dirty += deleted
 	}
 	c.AddReplyInt64(int64(deleted))
 }

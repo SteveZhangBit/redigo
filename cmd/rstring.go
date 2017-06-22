@@ -1,4 +1,4 @@
-package command
+package cmd
 
 import (
 	"math"
@@ -81,8 +81,8 @@ const (
  *
  * TODO: Currently, we only implement the very basic function of SET command. */
 func rstringSet(c *redigo.CommandArg, flags int, okReply, abortReply []byte) {
-	if (flags&REDIS_SET_NX > 0 && c.DB().LookupKeyWrite(c.Argv[1]) != nil) ||
-		(flags&REDIS_SET_XX > 0 && c.DB().LookupKeyWrite(c.Argv[1]) == nil) {
+	if (flags&REDIS_SET_NX > 0 && c.DB.LookupKeyWrite(c.Argv[1]) != nil) ||
+		(flags&REDIS_SET_XX > 0 && c.DB.LookupKeyWrite(c.Argv[1]) == nil) {
 		if len(abortReply) != 0 {
 			c.AddReply(abortReply)
 		} else {
@@ -91,9 +91,9 @@ func rstringSet(c *redigo.CommandArg, flags int, okReply, abortReply []byte) {
 		return
 	}
 
-	c.DB().SetKeyPersist(c.Argv[1], rstring.New(c.Argv[2]))
-	c.Server().AddDirty(1)
-	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_STRING, "set", c.Argv[1], c.DB().GetID())
+	c.DB.SetKeyPersist(c.Argv[1], rstring.New(c.Argv[2]))
+	c.Server.Dirty++
+	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_STRING, "set", c.Argv[1], c.DB.ID)
 	if len(okReply) != 0 {
 		c.AddReply(okReply)
 	} else {
@@ -155,9 +155,9 @@ func GETCommand(c *redigo.CommandArg) {
 
 func GETSETCommand(c *redigo.CommandArg) {
 	if rstringGet(c) {
-		c.DB().SetKeyPersist(c.Argv[1], rstring.New(c.Argv[2]))
-		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_STRING, "set", c.Argv[1], c.DB().GetID())
-		c.Server().AddDirty(1)
+		c.DB.SetKeyPersist(c.Argv[1], rstring.New(c.Argv[2]))
+		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_STRING, "set", c.Argv[1], c.DB.ID)
+		c.Server.Dirty++
 	}
 }
 
@@ -172,7 +172,7 @@ func GETRANGECommand(c *redigo.CommandArg) {
 func MGETCommand(c *redigo.CommandArg) {
 	c.AddReplyMultiBulkLen(c.Argc - 1)
 	for i := 1; i < c.Argc; i++ {
-		if o := c.DB().LookupKeyRead(c.Argv[i]); o == nil {
+		if o := c.DB.LookupKeyRead(c.Argv[i]); o == nil {
 			c.AddReply(protocol.NullBulk)
 		} else {
 			if val, ok := o.(rtype.String); !ok {
@@ -194,21 +194,21 @@ func rstringmset(c *redigo.CommandArg, nx bool) {
 	busykeys := 0
 	if nx {
 		for i := 1; i < c.Argc; i++ {
-			if c.DB().LookupKeyWrite(c.Argv[i]) != nil {
+			if c.DB.LookupKeyWrite(c.Argv[i]) != nil {
 				busykeys++
 			}
 		}
-		if busykeys {
+		if busykeys > 0 {
 			c.AddReply(protocol.CZero)
 			return
 		}
 	}
 
 	for i := 1; i < c.Argc; i++ {
-		c.DB().SetKeyPersist(c.Argv[i], rstring.New(c.Argv[i+1]))
-		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_STRING, "set", c.Argv[i], c.DB().GetID())
+		c.DB.SetKeyPersist(c.Argv[i], rstring.New(c.Argv[i+1]))
+		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_STRING, "set", c.Argv[i], c.DB.ID)
 	}
-	c.Server().AddDirty((c.Argc - 1) / 2)
+	c.Server.Dirty += (c.Argc - 1) / 2
 	if nx {
 		c.AddReply(protocol.COne)
 	} else {
@@ -228,7 +228,7 @@ func INCRBYFLOATCommand(c *redigo.CommandArg) {
 	var str rtype.String
 
 	var ok bool
-	o := c.DB().LookupKeyWrite(c.Argv[1])
+	o := c.DB.LookupKeyWrite(c.Argv[1])
 	if str, ok = o.(rtype.String); o != nil && !ok {
 		c.AddReply(protocol.WrongTypeErr)
 		return
@@ -247,14 +247,14 @@ func INCRBYFLOATCommand(c *redigo.CommandArg) {
 
 		str = rstring.NewFromFloat64(x)
 		if o != nil {
-			c.DB().Update(c.Argv[1], str)
+			c.DB.Update(c.Argv[1], str)
 		} else {
-			c.DB().Add(c.Argv[1], str)
+			c.DB.Add(c.Argv[1], str)
 		}
 
-		c.DB().SignalModifyKey(c.Argv[1])
-		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_STRING, "incrbyfloat", c.Argv[1], c.DB().GetID())
-		c.Server().AddDirty(1)
+		c.DB.SignalModifyKey(c.Argv[1])
+		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_STRING, "incrbyfloat", c.Argv[1], c.DB.ID)
+		c.Server.Dirty++
 		c.AddReplyBulk(str.Bytes())
 
 		/* TODO: Always replicate INCRBYFLOAT as a SET command with the final value
@@ -267,7 +267,7 @@ func rstringIncrDecr(c *redigo.CommandArg, incr int64) {
 	var str rtype.String
 
 	var ok bool
-	o := c.DB().LookupKeyWrite(c.Argv[1])
+	o := c.DB.LookupKeyWrite(c.Argv[1])
 	if str, ok = o.(rtype.String); o != nil && !ok {
 		c.AddReply(protocol.WrongTypeErr)
 		return
@@ -286,14 +286,14 @@ func rstringIncrDecr(c *redigo.CommandArg, incr int64) {
 		// TODO: Redis uses redigo Integers to save memory, we do not implement this feature right now.
 		str = rstring.NewFromInt64(x)
 		if o != nil {
-			c.DB().Update(c.Argv[1], str)
+			c.DB.Update(c.Argv[1], str)
 		} else {
-			c.DB().Add(c.Argv[1], str)
+			c.DB.Add(c.Argv[1], str)
 		}
 
-		c.DB().SignalModifyKey(c.Argv[1])
-		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_STRING, "incrby", c.Argv[1], c.DB().GetID())
-		c.Server().AddDirty(1)
+		c.DB.SignalModifyKey(c.Argv[1])
+		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_STRING, "incrby", c.Argv[1], c.DB.ID)
+		c.Server.Dirty++
 		c.AddReplyInt64(x)
 	}
 }
@@ -323,9 +323,9 @@ func APPENDCommand(c *redigo.CommandArg) {
 	var totallen int64
 
 	var ok bool
-	if o := c.DB().LookupKeyWrite(c.Argv[1]); o == nil {
+	if o := c.DB.LookupKeyWrite(c.Argv[1]); o == nil {
 		str = rstring.New(c.Argv[2])
-		c.DB().Add(c.Argv[1], str)
+		c.DB.Add(c.Argv[1], str)
 		totallen = str.Len()
 	} else if str, ok = o.(rtype.String); !ok {
 		c.AddReply(protocol.WrongTypeErr)
@@ -336,11 +336,11 @@ func APPENDCommand(c *redigo.CommandArg) {
 			return
 		}
 
-		c.DB().Update(c.Argv[1], str.Append(c.Argv[2]))
+		c.DB.Update(c.Argv[1], str.Append(c.Argv[2]))
 	}
-	c.DB().SignalModifyKey(c.Argv[1])
-	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_STRING, "append", c.Argv[1], c.DB().GetID())
-	c.Server().AddDirty(1)
+	c.DB.SignalModifyKey(c.Argv[1])
+	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_STRING, "append", c.Argv[1], c.DB.ID)
+	c.Server.Dirty++
 	c.AddReplyInt64(totallen)
 }
 

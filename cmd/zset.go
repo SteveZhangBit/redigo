@@ -1,4 +1,4 @@
-package command
+package cmd
 
 import (
 	"bytes"
@@ -40,9 +40,9 @@ func ZADDCommand(c *redigo.CommandArg) {
 	}
 
 	// Lookup the key and create the sorted set if does not exist.
-	if o := c.DB().LookupKeyWrite(c.Argv[1]); o == nil {
+	if o := c.DB.LookupKeyWrite(c.Argv[1]); o == nil {
 		z = zset.New()
-		c.DB().Add(c.Argv[1], z)
+		c.DB.Add(c.Argv[1], z)
 	} else {
 		var ok bool
 		if z, ok = o.(rtype.ZSet); !ok {
@@ -63,19 +63,19 @@ func ZADDCommand(c *redigo.CommandArg) {
 			 * dictionary still has a reference to it. */
 			if score != curscore {
 				z.Update(score, curobj)
-				c.Server().AddDirty(1)
+				c.Server.Dirty++
 				updated++
 			}
 		} else {
 			z.Add(score, curobj)
-			c.Server().AddDirty(1)
+			c.Server.Dirty++
 			added++
 		}
 	}
 	c.AddReplyInt64(added + updated)
 	if added > 0 || updated > 0 {
-		c.DB().SignalModifyKey(c.Argv[1])
-		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_ZSET, "zadd", c.Argv[1], c.DB().GetID())
+		c.DB.SignalModifyKey(c.Argv[1])
+		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_ZSET, "zadd", c.Argv[1], c.DB.ID)
 	}
 }
 
@@ -102,7 +102,7 @@ func ZREMCommand(c *redigo.CommandArg) {
 			deleted++
 			z.Delete(score, val)
 			if z.Len() == 0 {
-				c.DB().Delete(c.Argv[1])
+				c.DB.Delete(c.Argv[1])
 				keyremoved = true
 				break
 			}
@@ -110,12 +110,12 @@ func ZREMCommand(c *redigo.CommandArg) {
 	}
 
 	if deleted > 0 {
-		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_ZSET, "zrem", c.Argv[1], c.DB().GetID())
+		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_ZSET, "zrem", c.Argv[1], c.DB.ID)
 		if keyremoved {
-			c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB().GetID())
+			c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB.ID)
 		}
-		c.DB().SignalModifyKey(c.Argv[1])
-		c.Server().AddDirty(1)
+		c.DB.SignalModifyKey(c.Argv[1])
+		c.Server.Dirty++
 	}
 	c.AddReplyInt64(deleted)
 }

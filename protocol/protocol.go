@@ -4,30 +4,14 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/SteveZhangBit/redigo"
-	"github.com/SteveZhangBit/redigo/util"
 	"io"
 	"math"
 	"strconv"
 	"unicode"
+
+	"github.com/SteveZhangBit/redigo"
+	"github.com/SteveZhangBit/redigo/util"
 )
-
-type Writer interface {
-	AddReply(x []byte)
-	AddReplyByte(x byte)
-	AddReplyString(x string)
-	AddReplyInt64(x int64)
-	AddReplyFloat64(x float64)
-	AddReplyMultiBulkLen(x int)
-	AddReplyBulk(x []byte)
-	AddReplyError(msg string)
-	AddReplyStatus(msg string)
-	Flush() error
-}
-
-type Reader interface {
-	Read() (*redigo.CommandArg, error)
-}
 
 const (
 	REDIS_INLINE_MAXSIZE = 1024 * 60

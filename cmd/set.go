@@ -1,4 +1,4 @@
-package command
+package cmd
 
 import (
 	"github.com/SteveZhangBit/redigo"
@@ -11,9 +11,9 @@ import (
 func SADDCommand(c *redigo.CommandArg) {
 	var s rtype.Set
 
-	if o := c.DB().LookupKeyWrite(c.Argv[1]); o == nil {
+	if o := c.DB.LookupKeyWrite(c.Argv[1]); o == nil {
 		s = set.New(rstring.New(c.Argv[2]))
-		c.DB().Add(c.Argv[1], s)
+		c.DB.Add(c.Argv[1], s)
 	} else {
 		var ok bool
 		if s, ok = o.(rtype.Set); !ok {
@@ -29,10 +29,10 @@ func SADDCommand(c *redigo.CommandArg) {
 		}
 	}
 	if added > 0 {
-		c.DB().SignalModifyKey(c.Argv[1])
-		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_SET, "sadd", c.Argv[1], c.DB().GetID())
+		c.DB.SignalModifyKey(c.Argv[1])
+		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_SET, "sadd", c.Argv[1], c.DB.ID)
 	}
-	c.Server().AddDirty(added)
+	c.Server.Dirty += added
 	c.AddReplyInt64(int64(added))
 }
 
@@ -53,19 +53,19 @@ func SREMCommand(c *redigo.CommandArg) {
 		if s.Remove(rstring.New(c.Argv[i])) {
 			deleted++
 			if s.Size() == 0 {
-				c.DB().Delete(c.Argv[1])
+				c.DB.Delete(c.Argv[1])
 				keyremoved = true
 				break
 			}
 		}
 	}
 	if deleted > 0 {
-		c.DB().SignalModifyKey(c.Argv[1])
-		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_SET, "srem", c.Argv[1], c.DB().GetID())
+		c.DB.SignalModifyKey(c.Argv[1])
+		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_SET, "srem", c.Argv[1], c.DB.ID)
 		if keyremoved {
-			c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB().GetID())
+			c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB.ID)
 		}
-		c.Server().AddDirty(deleted)
+		c.Server.Dirty += deleted
 	}
 	c.AddReplyInt64(int64(deleted))
 }
@@ -115,17 +115,17 @@ func SPOPCommand(c *redigo.CommandArg) {
 
 	e := s.RandomElement()
 	s.Remove(e)
-	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_SET, "spop", c.Argv[1], c.DB().GetID())
+	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_SET, "spop", c.Argv[1], c.DB.ID)
 
 	// TODO: Replicate/AOF this command as an SREM operation
 
 	c.AddReplyBulk(e.Bytes())
 	if s.Size() == 0 {
-		c.DB().Delete(c.Argv[1])
-		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB().GetID())
+		c.DB.Delete(c.Argv[1])
+		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB.ID)
 	}
-	c.DB().SignalModifyKey(c.Argv[1])
-	c.Server().AddDirty(1)
+	c.DB.SignalModifyKey(c.Argv[1])
+	c.Server.Dirty++
 }
 
 func SRANDMEMBERCommand(c *redigo.CommandArg) {

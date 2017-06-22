@@ -1,4 +1,4 @@
-package command
+package cmd
 
 import (
 	"bytes"
@@ -25,11 +25,11 @@ func FLUSHALLCommand(c *redigo.CommandArg) {
 func DELCommand(c *redigo.CommandArg) {
 	var deleted int64
 	for i := 0; i < c.Argc; i++ {
-		c.DB().ExpireIfNeed(c.Argv[i])
-		if c.DB().Delete(c.Argv[i]) {
-			c.DB().SignalModifyKey(c.Argv[i])
-			c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "del", c.Argv[i], c.DB().GetID())
-			c.Server().AddDirty(1)
+		c.DB.ExpireIfNeed(c.Argv[i])
+		if c.DB.Delete(c.Argv[i]) {
+			c.DB.SignalModifyKey(c.Argv[i])
+			c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "del", c.Argv[i], c.DB.ID)
+			c.Server.Dirty++
 			deleted++
 		}
 	}
@@ -41,8 +41,8 @@ func DELCommand(c *redigo.CommandArg) {
 func EXISTSCommand(c *redigo.CommandArg) {
 	var count int64
 	for i := 1; i < c.Argc; i++ {
-		c.DB().ExpireIfNeed(c.Argv[i])
-		if c.DB().Exists(c.Argv[i]) {
+		c.DB.ExpireIfNeed(c.Argv[i])
+		if c.DB.Exists(c.Argv[i]) {
 			count++
 		}
 	}
@@ -65,7 +65,7 @@ func SELECTCommand(c *redigo.CommandArg) {
 }
 
 func RANDOMKEYCommand(c *redigo.CommandArg) {
-	if key := c.DB().RandomKey(); len(key) == 0 {
+	if key := c.DB.RandomKey(); len(key) == 0 {
 		c.AddReply(protocol.NullBulk)
 	} else {
 		c.AddReplyBulk(key)
@@ -77,7 +77,7 @@ func KEYSCommand(c *redigo.CommandArg) {
 
 	pattern := c.Argv[1]
 	isAllKeys := len(pattern) == 1 && pattern[0] == '*'
-	for key := range c.DB().GetDict() {
+	for key := range c.DB.GetSpace() {
 		key_bytes := []byte(key)
 		if isAllKeys || util.MatchPattern(pattern, key_bytes, false) {
 			keys = append(keys, key_bytes)
@@ -103,7 +103,7 @@ func LASTSAVECommand(c *redigo.CommandArg) {
 
 func TYPECommand(c *redigo.CommandArg) {
 	var t string
-	if o := c.DB().LookupKeyRead(c.Argv[1]); o == nil {
+	if o := c.DB.LookupKeyRead(c.Argv[1]); o == nil {
 		t = "none"
 	} else {
 		switch o.(type) {
@@ -137,26 +137,26 @@ func renameGeneric(c *redigo.CommandArg, nx bool) {
 		return
 	}
 
-	expire := c.DB().GetExpire(c.Argv[1])
-	if c.DB().LookupKeyWrite(c.Argv[2]) != nil {
+	expire := c.DB.GetExpire(c.Argv[1])
+	if c.DB.LookupKeyWrite(c.Argv[2]) != nil {
 		if nx {
 			c.AddReply(protocol.CZero)
 			return
 		}
 		/* Overwrite: delete the old key before creating the new one
 		 * with the same name. */
-		c.DB().Delete(c.Argv[2])
+		c.DB.Delete(c.Argv[2])
 	}
-	c.DB().Add(c.Argv[2], o)
+	c.DB.Add(c.Argv[2], o)
 	if expire > 0 {
-		c.DB().SetExpire(c.Argv[2], expire)
+		c.DB.SetExpire(c.Argv[2], expire)
 	}
-	c.DB().Delete(c.Argv[1])
-	c.DB().SignalModifyKey(c.Argv[1])
-	c.DB().SignalModifyKey(c.Argv[2])
-	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "rename_from", c.Argv[1], c.DB().GetID())
-	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "rename_to", c.Argv[2], c.DB().GetID())
-	c.Server().AddDirty(1)
+	c.DB.Delete(c.Argv[1])
+	c.DB.SignalModifyKey(c.Argv[1])
+	c.DB.SignalModifyKey(c.Argv[2])
+	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "rename_from", c.Argv[1], c.DB.ID)
+	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "rename_to", c.Argv[2], c.DB.ID)
+	c.Server.Dirty++
 	if nx {
 		c.AddReply(protocol.COne)
 	} else {

@@ -1,4 +1,4 @@
-package command
+package cmd
 
 import (
 	"time"
@@ -18,7 +18,7 @@ func listPush(c *redigo.CommandArg, where int) {
 	var l rtype.List
 	var pushed int
 
-	if o := c.DB().LookupKeyWrite(c.Argv[1]); o != nil {
+	if o := c.DB.LookupKeyWrite(c.Argv[1]); o != nil {
 		var ok bool
 		if l, ok = o.(rtype.List); !ok {
 			c.AddReply(protocol.WrongTypeErr)
@@ -26,7 +26,7 @@ func listPush(c *redigo.CommandArg, where int) {
 		}
 	} else {
 		l = list.New()
-		c.DB().Add(c.Argv[1], l)
+		c.DB.Add(c.Argv[1], l)
 	}
 
 	for i := 2; i < c.Argc; i++ {
@@ -45,10 +45,10 @@ func listPush(c *redigo.CommandArg, where int) {
 		} else {
 			e = "rpush"
 		}
-		c.DB().SignalModifyKey(c.Argv[1])
-		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_LIST, e, c.Argv[1], c.DB().GetID())
+		c.DB.SignalModifyKey(c.Argv[1])
+		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_LIST, e, c.Argv[1], c.DB.ID)
 	}
-	c.Server().AddDirty(pushed)
+	c.Server.Dirty += pushed
 }
 
 func LPUSHCommand(c *redigo.CommandArg) {
@@ -91,9 +91,9 @@ func listPushx(c *redigo.CommandArg, ref rtype.String, val rtype.String, where i
 		}
 
 		if inserted {
-			c.DB().SignalModifyKey(c.Argv[1])
-			c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_LIST, "linsert", c.Argv[1], c.DB().GetID())
-			c.Server().AddDirty(1)
+			c.DB.SignalModifyKey(c.Argv[1])
+			c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_LIST, "linsert", c.Argv[1], c.DB.ID)
+			c.Server.Dirty++
 		} else {
 			c.AddReply(protocol.CNegOne)
 			return
@@ -107,9 +107,9 @@ func listPushx(c *redigo.CommandArg, ref rtype.String, val rtype.String, where i
 			e = "rpush"
 			l.PushBack(val)
 		}
-		c.DB().SignalModifyKey(c.Argv[1])
-		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_LIST, e, c.Argv[1], c.DB().GetID())
-		c.Server().AddDirty(1)
+		c.DB.SignalModifyKey(c.Argv[1])
+		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_LIST, e, c.Argv[1], c.DB.ID)
+		c.Server.Dirty++
 	}
 	c.AddReplyInt64(int64(l.Len()))
 }
@@ -185,9 +185,9 @@ func LSETCommand(c *redigo.CommandArg) {
 	if e != nil {
 		e.SetValue(rstring.New(c.Argv[3]))
 		c.AddReply(protocol.OK)
-		c.DB().SignalModifyKey(c.Argv[1])
-		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_LIST, "lset", c.Argv[1], c.DB().GetID())
-		c.Server().AddDirty(1)
+		c.DB.SignalModifyKey(c.Argv[1])
+		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_LIST, "lset", c.Argv[1], c.DB.ID)
+		c.Server.Dirty++
 	} else {
 		c.AddReply(protocol.OutOfRangeErr)
 	}
@@ -217,13 +217,13 @@ func listPop(c *redigo.CommandArg, where int) {
 		c.AddReply(protocol.NullBulk)
 	} else {
 		c.AddReplyBulk(e.Value().Bytes())
-		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_LIST, event, c.Argv[1], c.DB().GetID())
+		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_LIST, event, c.Argv[1], c.DB.ID)
 		if l.Len() == 0 {
-			c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB().GetID())
-			c.DB().Delete(c.Argv[1])
+			c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB.ID)
+			c.DB.Delete(c.Argv[1])
 		}
-		c.DB().SignalModifyKey(c.Argv[1])
-		c.Server().AddDirty(1)
+		c.DB.SignalModifyKey(c.Argv[1])
+		c.Server.Dirty++
 	}
 }
 
@@ -352,13 +352,13 @@ func LTRIMCommand(c *redigo.CommandArg) {
 		l.Remove(e)
 	}
 
-	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_LIST, "ltrim", c.Argv[1], c.DB().GetID())
+	c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_LIST, "ltrim", c.Argv[1], c.DB.ID)
 	if l.Len() == 0 {
-		c.DB().Delete(c.Argv[1])
-		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB().GetID())
+		c.DB.Delete(c.Argv[1])
+		c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "del", c.Argv[1], c.DB.ID)
 	}
-	c.DB().SignalModifyKey(c.Argv[1])
-	c.Server().AddDirty(1)
+	c.DB.SignalModifyKey(c.Argv[1])
+	c.Server.Dirty++
 	c.AddReply(protocol.OK)
 }
 
@@ -396,7 +396,7 @@ func LREMCommand(c *redigo.CommandArg) {
 			e := iter.Next().(rtype.ListElement)
 			if rstring.EqualStringObjects(e.Value(), val) {
 				iter.Remove()
-				c.Server().AddDirty(1)
+				c.Server.Dirty++
 				removed++
 				if toremove != 0 && removed == toremove {
 					break
@@ -409,7 +409,7 @@ func LREMCommand(c *redigo.CommandArg) {
 			e := iter.Next().(rtype.ListElement)
 			if rstring.EqualStringObjects(e.Value(), val) {
 				iter.Remove()
-				c.Server().AddDirty(1)
+				c.Server.Dirty++
 				removed++
 				if toremove != 0 && removed == toremove {
 					break
@@ -418,11 +418,11 @@ func LREMCommand(c *redigo.CommandArg) {
 		}
 	}
 	if l.Len() == 0 {
-		c.DB().Delete(c.Argv[1])
+		c.DB.Delete(c.Argv[1])
 	}
 	c.AddReplyInt64(int64(removed))
 	if removed > 0 {
-		c.DB().SignalModifyKey(c.Argv[1])
+		c.DB.SignalModifyKey(c.Argv[1])
 	}
 }
 
@@ -476,7 +476,7 @@ func listBlockingPop(c *redigo.CommandArg, where int) {
 	}
 
 	for i := 1; i < c.Argc-1; i++ {
-		if o := c.DB().LookupKeyWrite(c.Argv[i]); o != nil {
+		if o := c.DB.LookupKeyWrite(c.Argv[i]); o != nil {
 			if l, ok = o.(rtype.List); !ok {
 				c.AddReply(protocol.WrongTypeErr)
 				return
@@ -496,14 +496,14 @@ func listBlockingPop(c *redigo.CommandArg, where int) {
 				c.AddReplyMultiBulkLen(2)
 				c.AddReplyBulk(c.Argv[i])
 				c.AddReplyBulk(val.Bytes())
-				c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_LIST, event, c.Argv[i], c.DB().GetID())
+				c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_LIST, event, c.Argv[i], c.DB.ID)
 
 				if l.Len() == 0 {
-					c.DB().Delete(c.Argv[i])
-					c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "del", c.Argv[i], c.DB().GetID())
+					c.DB.Delete(c.Argv[i])
+					c.NotifyKeyspaceEvent(redigo.REDIS_NOTIFY_GENERIC, "del", c.Argv[i], c.DB.ID)
 				}
-				c.DB().SignalModifyKey(c.Argv[i])
-				c.Server().AddDirty(1)
+				c.DB.SignalModifyKey(c.Argv[i])
+				c.Server.Dirty++
 
 				// At least one list is non-empty, so return
 				return

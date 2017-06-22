@@ -1,4 +1,4 @@
-package command
+package cmd
 
 import (
 	"fmt"
@@ -55,7 +55,7 @@ func SHUTDOWNCommand(c *redigo.CommandArg) {
 	 *
 	 * Also when in Sentinel mode clear the SAVE flag and force NOSAVE. */
 
-	if c.Server().PrepareForShutdown() {
+	if c.Server.PrepareForShutdown() {
 		os.Exit(0)
 	}
 	c.AddReplyError("Errors trying to SHUTDOWN. Check logs.")
