@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"container/list"
 	"github.com/SteveZhangBit/redigo/rtype"
 	"github.com/SteveZhangBit/redigo/util"
 )
@@ -21,10 +22,10 @@ type Server struct {
 	StatStartTime   time.Time
 	StatNumCommands int
 
-	clients        []*Client
+	clients        *list.List
 	dbs            []*DB
-	rwlock         sync.RWMutex
 	listener       Listener
+	rwlock         sync.RWMutex
 	blockedClients int
 	readyKeys      []readyKey
 }
@@ -51,6 +52,7 @@ func NewServer(listener Listener) *Server {
 		StatStartTime: time.Now(),
 		DBNums:        4,
 		listener:      listener,
+		clients:       list.New(),
 	}
 	// Create the Redis databases, and initialize other internal state.
 	s.dbs = make([]*DB, s.DBNums)
@@ -76,7 +78,7 @@ func (s *Server) Init(commandTable []*Command) {
 	for {
 		select {
 		case conn := <-connChan:
-			s.addClients(conn)
+			s.addClient(conn)
 		case <-interrupt:
 			RedigoLog(REDIS_WARNING, "Received SIGINT scheduling shutdown...")
 			if s.PrepareForShutdown() {
@@ -128,27 +130,30 @@ func (s *Server) populateCommandTable(commandTable []*Command) {
 	}
 }
 
-func (s *Server) addClients(conn Connection) {
+func (s *Server) addClient(conn Connection) {
 	s.rwlock.Lock()
 	defer s.rwlock.Unlock()
 	c := NewClient(s, conn)
 	c.Init()
-	s.clients = append(s.clients, c)
+	s.clients.PushBack(c)
 	RedigoLog(REDIS_DEBUG, "Add client on %v", c.GetAddr())
 }
 
-func (s *Server) removeClients(c *Client) {
+func (s *Server) removeClient(c *Client) {
 	s.rwlock.Lock()
 	defer s.rwlock.Unlock()
 
-	var i int
-	for i = 0; i < len(s.clients); i++ {
-		if c == s.clients[i] {
+	var e *list.Element
+	for e = s.clients.Front(); e != nil; e = e.Next() {
+		if c == e.Value {
 			break
 		}
 	}
-	s.clients = append(s.clients[:i], s.clients[:i+1]...)
-	RedigoLog(REDIS_DEBUG, "Remove client on %v", c.GetAddr())
+	if removed, ok := s.clients.Remove(e).(*Client); ok {
+		RedigoLog(REDIS_DEBUG, "Remove client on %v", removed.GetAddr())
+	} else {
+		RedigoLog(REDIS_WARNING, "Cannot find client on %v", c.GetAddr())
+	}
 }
 
 /* If this function gets called we already read a whole

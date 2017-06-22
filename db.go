@@ -11,12 +11,14 @@ type DB struct {
 }
 
 func NewDB(server *Server, id int) *DB {
-	return &DB{
+	d := &DB{
 		KV:             kv.NewKV(id),
 		server:         server,
 		blockedClients: make(map[string][]*Client),
 		readyKeys:      make(map[string]struct{}),
 	}
+	d.KV.KeySpaceSignalHandler = d
+	return d
 }
 
 func (d *DB) LookupKeyRead(key []byte) interface{} {

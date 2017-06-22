@@ -59,10 +59,6 @@ type Reader interface {
 	Read() (*CommandArg, error)
 }
 
-type Executor interface {
-	ProcessCommand(arg *CommandArg)
-}
-
 type Connection interface {
 	Writer
 
@@ -70,7 +66,8 @@ type Connection interface {
 	SetBlockTimeout(t time.Duration)
 	GetBlockedKeys() map[string]struct{}
 	Close() error
-	NextCommand(exec Executor) error
+	NextCommand() (arg *CommandArg, err error)
+	SetProtocolError()
 	Block()
 	Unblock()
 }

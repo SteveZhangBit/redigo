@@ -72,31 +72,24 @@ func (c *Connection) Close() error {
 	return c.conn.Close()
 }
 
-func (c *Connection) NextCommand(exec redigo.Executor) error {
+func (c *Connection) NextCommand() (arg *redigo.CommandArg, err error) {
 	if c.flags&REDIS_BLOCKED > 0 {
 		c.wait()
 	}
-	var arg *redigo.CommandArg
-	var err error
 
-	if arg, err = c.Read(); err == io.EOF {
-		return err
-	} else if err != nil {
-		c.AddReplyError(err.Error())
-		c.setProtocolError()
-		return nil
-	}
-	exec.ProcessCommand(arg)
-	if err = c.Flush(); err != nil {
-		redigo.RedigoLog(redigo.REDIS_VERBOSE, "Error writing to client: %s", err)
-		return err
-	} else if c.flags&REDIS_CLOSE_AFTER_REPLY > 0 {
-		return io.EOF
-	}
-	return nil
+	return c.Read()
 }
 
-func (c *Connection) setProtocolError() {
+func (c *Connection) Flush() (err error) {
+	if err = c.Writer.Flush(); err != nil {
+		redigo.RedigoLog(redigo.REDIS_VERBOSE, "Error writing to client: %s", err)
+	} else if c.flags&REDIS_CLOSE_AFTER_REPLY > 0 {
+		err = io.EOF
+	}
+	return
+}
+
+func (c *Connection) SetProtocolError() {
 	c.flags |= REDIS_CLOSE_AFTER_REPLY
 }
 

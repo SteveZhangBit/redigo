@@ -1,9 +1,9 @@
 package redigo
 
 import (
+	"io"
 	"time"
 )
-
 
 type Client struct {
 	Connection
@@ -22,12 +22,22 @@ func (c *Client) Init() {
 	c.SelectDB(0)
 	go func() {
 		for {
-			if err := c.NextCommand(c.Server); err != nil {
-				c.Close()
+			arg, err := c.NextCommand()
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				c.AddReplyError(err.Error())
+				c.SetProtocolError()
+			} else {
+				arg.Client = c
+				c.Server.ProcessCommand(arg)
+			}
+			if c.Flush() != nil {
 				break
 			}
 		}
-		c.Server.removeClients(c)
+		c.Close()
+		c.Server.removeClient(c)
 	}()
 }
 

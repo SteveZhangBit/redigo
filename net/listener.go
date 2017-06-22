@@ -21,7 +21,7 @@ func NewListener(port int, addr []string) *Listener {
 func (l *Listener) Listen() chan redigo.Connection {
 	connChan := make(chan redigo.Connection)
 	for _, ip := range l.bindAddr {
-		addr := fmt.Sprintf("%s;%d", ip, l.port)
+		addr := fmt.Sprintf("%s:%d", ip, l.port)
 		golistener, err := net.Listen("tcp", addr)
 		if err != nil {
 			redigo.RedigoLog(redigo.REDIS_DEBUG, "Creating Server TCP listening socket %s: %s", addr, err)

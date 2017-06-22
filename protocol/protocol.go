@@ -69,25 +69,25 @@ func NewRESPWriter(w io.Writer) *RESPWriter {
 }
 
 func (r *RESPWriter) AddReply(x []byte) {
-	if r.err != nil {
+	if r.err == nil {
 		_, r.err = r.Write(x)
 	}
 }
 
 func (r *RESPWriter) AddReplyByte(x byte) {
-	if r.err != nil {
+	if r.err == nil {
 		r.err = r.WriteByte(x)
 	}
 }
 
 func (r *RESPWriter) AddReplyString(x string) {
-	if r.err != nil {
+	if r.err == nil {
 		_, r.err = r.WriteString(x)
 	}
 }
 
 func (r *RESPWriter) Flush() error {
-	if r.err != nil {
+	if r.err == nil {
 		r.err = r.Writer.Flush()
 	}
 	return r.err
